@@ -1,0 +1,41 @@
+# ROS 2 build artefacts
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDEs/editors
+.vscode/
+.idea/
+*.swp
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# ROS bags
+*.bag
+*.db3
+
+# ML outputs / temporary files
+outputs/
+work_dirs/
+
+# Large model checkpoints
+*.pth
+*.pt
+*.onnx
+
+# Temporary files
+*.tmp
+*.log
