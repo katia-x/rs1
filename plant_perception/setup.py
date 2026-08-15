@@ -24,6 +24,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
+            'detection_node = plant_perception.detection_node:main',
         ],
     },
 )
