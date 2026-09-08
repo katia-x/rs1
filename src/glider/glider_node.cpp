@@ -1,0 +1,1 @@
+//glider platform node implementation

@@ -1,0 +1,1 @@
+//platform base class for any shared methods between glider and wombat
