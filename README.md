@@ -4,6 +4,9 @@ Robot for identification and removal of invasive plant species from struggling A
 ## Overview
 ROS 2 husky robot which navigates through a Gazebo simulation environment of bushland, identifying and removing invasive and harmful weed species to assist with environmental regeneration.
 
+## Navigation
+Using the Nav2 framework -Which needs to be installed into the ROS2 workspace-.
+
 ## Plant Detection
 The pipeline receives images from the Husky camera, converts them to OpenCV format, and runs RTMDet Tiny object detection.
 
