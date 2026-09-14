@@ -16,6 +16,8 @@ endif()
 ## Find packages, remove those that are not needed
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
+find_package(nav2_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
@@ -29,6 +31,22 @@ find_package(geometry_msgs REQUIRED)
 find_package(ament_cmake_ros REQUIRED)
 find_package(ament_index_cpp REQUIRED)
 find_package(rosbag2_cpp REQUIRED)
+
+add_library(wombatprocessing src/wombat/wombat_processing.cpp)
+ament_target_dependencies(wombatprocessing rclcpp geometry_msgs)
+
+add_executable(wombat_node src/wombat/wombat_node.cpp)
+ament_target_dependencies(
+  wombat_node
+  rclcpp
+  rclcpp_action
+  nav2_msgs
+  geometry_msgs
+  tf2
+  tf2_ros
+  tf2_geometry_msgs
+)
+target_link_libraries(wombat_node wombatprocessing)
 
 #################################################################
 
@@ -110,6 +128,8 @@ ament_target_dependencies(multiplayer_nodes
 target_link_libraries(multiplayer_nodes laserprocessing controllerprocessing missionprocessing trackmap centrelinemap racingline)
 
 install(TARGETS
+  wombat_node
+  wombatprocessing
   mission_node
   controller_node
   both_nodes
@@ -131,6 +151,12 @@ install(
     DIRECTORY
       launch
     DESTINATION share/${PROJECT_NAME}
+)
+
+install(
+    PROGRAMS
+      launch/wombat_launch.py
+    DESTINATION share/${PROJECT_NAME}/launch
 )
 
 install(
