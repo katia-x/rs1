@@ -13,6 +13,7 @@ def generate_launch_description():
 	# Future team members can add another launch include without modifying the
 	# Wombat-specific launch file.
 	use_sim_time = LaunchConfiguration('use_sim_time')
+	namespace = 'Wombat1'
 	package_share = FindPackageShare('rs1')
 
 	# This list is the integration point for the complete RS1 system. Keeping
@@ -24,6 +25,7 @@ def generate_launch_description():
 			])),
 			launch_arguments={
 				'use_sim_time': use_sim_time,
+				'namespace': namespace,
 			}.items(),
 		),
 	]

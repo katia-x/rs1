@@ -16,7 +16,7 @@ WombatNode::WombatNode() : Node("wombat_node"),
 	robot_base_frame_ = declare_parameter("robot_base_frame", "base_link");
 	inspection_pause_seconds_ = declare_parameter("inspection_pause_seconds", 5.0);
 	const auto weed_topic = declare_parameter(
-		"weed_locations_topic", "/Wombat1/weed_locations");
+		"weed_locations_topic", "/weed");
 
 	// PoseArray is intentionally the only perception dependency. A separate
 	// plant-perception node can publish detections without being coupled here.
@@ -24,7 +24,7 @@ WombatNode::WombatNode() : Node("wombat_node"),
 		weed_topic, rclcpp::QoS(10),
 		std::bind(&WombatNode::weed_callback, this, std::placeholders::_1));
 	// The action name is relative, so the launch namespace resolves it to
-	// /Wombat1/navigate_to_pose.
+	// the system namespace, for example /Wombat1/navigate_to_pose.
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, "navigate_to_pose");
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());

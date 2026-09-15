@@ -10,10 +10,10 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    # Keep the robot namespace fixed so Wombat topics, TF, and Nav2 actions are
-    # isolated from other robots that may be added later.
+    # Use one shared namespace for the complete RS1 system. Additional system
+    # components can join this namespace from the global launch file later.
     use_sim_time = LaunchConfiguration('use_sim_time')
-    namespace = 'Wombat1'
+    namespace = LaunchConfiguration('namespace')
     config_path = PathJoinSubstitution([
         FindPackageShare('rs1'), 'config'
     ])
@@ -83,6 +83,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_sim_time', default_value='True',
             description='Use simulation time.'),
+        DeclareLaunchArgument(
+            'namespace', default_value='Wombat1',
+            description='Namespace containing the complete RS1 system.'),
         slam,
         nav2,
         wombat,
