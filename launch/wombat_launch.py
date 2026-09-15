@@ -84,7 +84,7 @@ def generate_launch_description():
             'use_sim_time', default_value='True',
             description='Use simulation time.'),
         DeclareLaunchArgument(
-            'namespace', default_value='Wombat1',
+            'namespace', default_value='wombat',
             description='Namespace containing the complete RS1 system.'),
         slam,
         nav2,

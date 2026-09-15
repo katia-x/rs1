@@ -1,6 +1,6 @@
-# Nav2 configuration for the Wombat1 namespace.
+# Nav2 configuration for the wombat namespace.
 # The launch file supplies the namespace and remaps global map/TF names, so
-# relative topics and frame names resolve under /Wombat1 at runtime.
+# relative topics and frame names resolve under /wombat at runtime.
 
 # Behavior-tree navigator: accepts NavigateToPose goals from wombat_node.
 bt_navigator:

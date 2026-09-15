@@ -1,5 +1,5 @@
-# SLAM Toolbox configuration for the Wombat1 namespace.
-# The launch file places these names under /Wombat1 and remaps the map and TF
+# SLAM Toolbox configuration for the wombat namespace.
+# The launch file places these names under /wombat and remaps the map and TF
 # topics, while these frame names remain relative to that namespace.
 slam_toolbox:
   ros__parameters:

@@ -24,7 +24,7 @@ WombatNode::WombatNode() : Node("wombat_node"),
 		weed_topic, rclcpp::QoS(10),
 		std::bind(&WombatNode::weed_callback, this, std::placeholders::_1));
 	// The action name is relative, so the launch namespace resolves it to
-	// the system namespace, for example /Wombat1/navigate_to_pose.
+	// the system namespace, for example /wombat/navigate_to_pose.
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, "navigate_to_pose");
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
