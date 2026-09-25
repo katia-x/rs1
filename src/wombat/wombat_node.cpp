@@ -1,88 +1,110 @@
 #include "wombat/wombat_node.h"
 
+#include <angles/angles.h>
+#include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+#include <cmath>
 
 using namespace std::chrono_literals;
 
-WombatNode::WombatNode() : Node("wombat_node"),
-	processing_(
-		declare_parameter("initial_side_length", 2.0),
-		declare_parameter("side_length_increment", 2.0),
-		declare_parameter("search_corridor_width", 1.0))
+WombatNode::WombatNode()
+: Node("wombat_node")
 {
-	// Parameters keep search geometry, frame names, and inspection duration
-	// adjustable from launch or YAML without rebuilding the node.
 	global_frame_ = declare_parameter("global_frame", "map");
 	robot_base_frame_ = declare_parameter("robot_base_frame", "base_link");
-	inspection_pause_seconds_ = declare_parameter("inspection_pause_seconds", 5.0);
-	const auto weed_topic = declare_parameter(
-		"weed_locations_topic", "/weed");
+	linear_speed_ = declare_parameter("linear_speed", 0.5);
+	angular_speed_ = declare_parameter("angular_speed", 0.8);
+	goal_tolerance_ = declare_parameter("goal_tolerance", 0.25);
+	turn_tolerance_ = declare_parameter("turn_tolerance", 0.08);
 
-	// PoseArray is intentionally the only perception dependency. A separate
-	// plant-perception node can publish detections without being coupled here.
-	weed_subscription_ = create_subscription<geometry_msgs::msg::PoseArray>(
-		weed_topic, rclcpp::QoS(10),
-		std::bind(&WombatNode::weed_callback, this, std::placeholders::_1));
-	// The action name is relative, so the launch namespace resolves it to
-	// the system namespace, for example /wombat/navigate_to_pose.
-	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
-		this, "navigate_to_pose");
+	goal_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
+	cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
 	tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
-	// Nav2 handles continuous motion between goals, so a modest control rate is
-	// sufficient for selecting the next goal.
-	control_timer_ = create_wall_timer(
-		500ms, std::bind(&WombatNode::control_timer_callback, this));
+	control_timer_ = create_wall_timer(50ms, std::bind(&WombatNode::control_timer_callback, this));
 
-	RCLCPP_INFO(get_logger(), "Wombat planner listening on %s", weed_topic.c_str());
+	RCLCPP_INFO(get_logger(), "Wombat requesting goals from the mission service");
+	request_next_goal();
 }
 
-void WombatNode::weed_callback(
-	const geometry_msgs::msg::PoseArray::SharedPtr message)
+void WombatNode::request_next_goal()
 {
-	// Explicitly framed detections must already be in map coordinates. Frame
-	// conversion is deliberately outside this node for the current integration.
-	if (!message->header.frame_id.empty() && message->header.frame_id != global_frame_) {
+	if (!goal_client_->wait_for_service(1s)) {
 		RCLCPP_WARN_THROTTLE(
 			get_logger(), *get_clock(), 5000,
-			"Ignoring weed locations in frame '%s'; expected '%s'",
-			message->header.frame_id.c_str(), global_frame_.c_str());
+			"Waiting for mission wombat_next_goal service");
 		return;
 	}
-	processing_.update_weeds(message->poses);
+
+	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
+	auto future = goal_client_->async_send_request(
+		request, std::bind(&WombatNode::handle_goal_response, this, std::placeholders::_1));
+	(void)future;
+}
+
+void WombatNode::handle_goal_response(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future)
+{
+	try {
+		auto response = future.get();
+		if (!response) {
+			RCLCPP_WARN(get_logger(), "Mission did not return a valid next goal");
+			return;
+		}
+
+		current_goal_ = response->goal;
+		current_goal_.header.frame_id = current_goal_.header.frame_id.empty() ? global_frame_ : current_goal_.header.frame_id;
+		has_goal_ = true;
+		moving_ = true;
+		RCLCPP_INFO(get_logger(), "Received goal at x=%f y=%f is_weed=%s plant=%s",
+			current_goal_.pose.position.x,
+			current_goal_.pose.position.y,
+			response->is_weed ? "true" : "false",
+			response->plant_type.c_str());
+	} catch (const std::exception & ex) {
+		RCLCPP_ERROR(get_logger(), "Failed to receive next goal: %s", ex.what());
+	}
 }
 
 void WombatNode::control_timer_callback()
 {
-	// Do not submit competing goals while Nav2 is moving or the robot is paused
-	// at a weed for inspection.
-	if (goal_active_ || inspecting_weed_) {
+	if (!moving_ || !has_goal_) {
 		return;
 	}
 
-	geometry_msgs::msg::PoseStamped pose;
-	if (!current_pose(pose)) {
-		return;
-	}
-	// The first successful TF lookup establishes the search centre.
-	processing_.set_origin(pose);
-
-	if (!navigation_client_->wait_for_action_server(0s)) {
-		RCLCPP_WARN_THROTTLE(
-			get_logger(), *get_clock(), 5000,
-			"Waiting for Nav2 navigate_to_pose action server");
+	geometry_msgs::msg::PoseStamped current_pose_msg;
+	if (!current_pose(current_pose_msg)) {
 		return;
 	}
 
-	// Processing decides whether this goal is a search waypoint or nearby weed.
-	send_goal(processing_.choose_goal(pose));
+	const auto & target = current_goal_.pose;
+	const double dx = target.position.x - current_pose_msg.pose.position.x;
+	const double dy = target.position.y - current_pose_msg.pose.position.y;
+	const double distance = std::hypot(dx, dy);
+
+	if (distance <= goal_tolerance_) {
+		publish_cmd_vel(0.0, 0.0);
+		moving_ = false;
+		has_goal_ = false;
+		request_next_goal();
+		return;
+	}
+
+	const double target_yaw = std::atan2(dy, dx);
+	const double current_yaw = quaternion_yaw(current_pose_msg.pose.orientation);
+	double yaw_error = normalize_yaw(target_yaw - current_yaw);
+
+	if (std::abs(yaw_error) > turn_tolerance_) {
+		publish_cmd_vel(0.0, angular_speed_ * std::copysign(1.0, yaw_error));
+		return;
+	}
+
+	publish_cmd_vel(linear_speed_, 0.0);
 }
 
 bool WombatNode::current_pose(geometry_msgs::msg::PoseStamped & pose)
 {
 	try {
-		// Nav2 and SLAM publish TF asynchronously, so startup may briefly lack
-		// the transform needed to plan a goal.
 		const auto transform = tf_buffer_->lookupTransform(
 			global_frame_, robot_base_frame_, tf2::TimePointZero);
 		pose.header = transform.header;
@@ -94,70 +116,39 @@ bool WombatNode::current_pose(geometry_msgs::msg::PoseStamped & pose)
 	} catch (const tf2::TransformException & error) {
 		RCLCPP_WARN_THROTTLE(
 			get_logger(), *get_clock(), 5000,
-			"Waiting for %s -> %s transform: %s", global_frame_.c_str(),
-			robot_base_frame_.c_str(), error.what());
+			"Waiting for %s -> %s transform: %s",
+			global_frame_.c_str(), robot_base_frame_.c_str(), error.what());
 		return false;
 	}
 }
 
-void WombatNode::send_goal(const WombatProcessing::Goal & goal)
+void WombatNode::publish_cmd_vel(double linear_speed, double angular_speed)
 {
-	// Store the selected goal because the result callback must distinguish a
-	// completed weed inspection from a completed search segment.
-	active_goal_ = goal;
-	active_goal_.pose.header.frame_id = global_frame_;
-	active_goal_.pose.header.stamp = now();
-	goal_active_ = true;
-
-	NavigateToPose::Goal nav_goal;
-	nav_goal.pose = active_goal_.pose;
-	auto options = rclcpp_action::Client<NavigateToPose>::SendGoalOptions();
-	options.goal_response_callback =
-		std::bind(&WombatNode::goal_response_callback, this, std::placeholders::_1);
-	options.result_callback =
-		std::bind(&WombatNode::result_callback, this, std::placeholders::_1);
-	navigation_client_->async_send_goal(nav_goal, options);
+	geometry_msgs::msg::Twist msg;
+	msg.linear.x = linear_speed;
+	msg.angular.z = angular_speed;
+	cmd_vel_pub_->publish(msg);
 }
 
-void WombatNode::goal_response_callback(const GoalHandle::SharedPtr & goal_handle)
+double WombatNode::normalize_yaw(double yaw)
 {
-	// A rejected goal releases the planner so the timer can retry.
-	if (!goal_handle) {
-		goal_active_ = false;
-		RCLCPP_WARN(get_logger(), "Nav2 rejected the Wombat goal");
+	while (yaw > M_PI) {
+		yaw -= 2.0 * M_PI;
 	}
+	while (yaw < -M_PI) {
+		yaw += 2.0 * M_PI;
+	}
+	return yaw;
 }
 
-void WombatNode::result_callback(const GoalHandle::WrappedResult & result)
+double WombatNode::quaternion_yaw(const geometry_msgs::msg::Quaternion & orientation)
 {
-	// Failed or cancelled goals remain pending; only successful navigation is
-	// committed to the planner state below.
-	goal_active_ = false;
-	if (result.code != rclcpp_action::ResultCode::SUCCEEDED) {
-		RCLCPP_WARN(get_logger(), "Nav2 did not complete the Wombat goal");
-		return;
-	}
-
-	if (active_goal_.weed_index.has_value()) {
-		// Reaching a weed is not enough: pause briefly so the robot can inspect it.
-		inspecting_weed_ = true;
-		inspection_timer_ = create_wall_timer(
-			std::chrono::duration_cast<std::chrono::milliseconds>(
-				std::chrono::duration<double>(inspection_pause_seconds_)),
-			std::bind(&WombatNode::finish_inspection, this));
-	} else {
-		// A completed search waypoint advances the expanding-square generator.
-		processing_.complete_goal(active_goal_);
-	}
-}
-
-void WombatNode::finish_inspection()
-{
-	// Cancel the one-shot timer before updating planner state so it cannot fire
-	// repeatedly and remove the same weed more than once.
-	if (inspection_timer_) {
-		inspection_timer_->cancel();
-	}
-	processing_.complete_goal(active_goal_);
-	inspecting_weed_ = false;
+	tf2::Quaternion q;
+	tf2::fromMsg(orientation, q);
+	tf2::Matrix3x3 m(q);
+	double roll = 0.0;
+	double pitch = 0.0;
+	double yaw = 0.0;
+	m.getRPY(roll, pitch, yaw);
+	return yaw;
 }
