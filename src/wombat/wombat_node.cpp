@@ -1,6 +1,5 @@
 #include "wombat/wombat_node.h"
 
-#include <angles/angles.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 
@@ -8,32 +7,19 @@
 
 using namespace std::chrono_literals;
 
-WombatNode::WombatNode()
-: Node("wombat_node")
+WombatNode::WombatNode() : Node("wombat_node")
 {
-	global_frame_ = declare_parameter("global_frame", "map");
-	robot_base_frame_ = declare_parameter("robot_base_frame", "base_link");
-	linear_speed_ = declare_parameter("linear_speed", 0.5);
-	angular_speed_ = declare_parameter("angular_speed", 0.8);
-	goal_tolerance_ = declare_parameter("goal_tolerance", 0.25);
-	turn_tolerance_ = declare_parameter("turn_tolerance", 0.08);
-
 	goal_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
 	cmd_vel_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
 	tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 	control_timer_ = create_wall_timer(50ms, std::bind(&WombatNode::control_timer_callback, this));
-
-	RCLCPP_INFO(get_logger(), "Wombat requesting goals from the mission service");
 	request_next_goal();
 }
 
 void WombatNode::request_next_goal()
 {
 	if (!goal_client_->wait_for_service(1s)) {
-		RCLCPP_WARN_THROTTLE(
-			get_logger(), *get_clock(), 5000,
-			"Waiting for mission wombat_next_goal service");
 		return;
 	}
 
@@ -45,25 +31,11 @@ void WombatNode::request_next_goal()
 
 void WombatNode::handle_goal_response(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future)
 {
-	try {
-		auto response = future.get();
-		if (!response) {
-			RCLCPP_WARN(get_logger(), "Mission did not return a valid next goal");
-			return;
-		}
-
-		current_goal_ = response->goal;
-		current_goal_.header.frame_id = current_goal_.header.frame_id.empty() ? global_frame_ : current_goal_.header.frame_id;
-		has_goal_ = true;
-		moving_ = true;
-		RCLCPP_INFO(get_logger(), "Received goal at x=%f y=%f is_weed=%s plant=%s",
-			current_goal_.pose.position.x,
-			current_goal_.pose.position.y,
-			response->is_weed ? "true" : "false",
-			response->plant_type.c_str());
-	} catch (const std::exception & ex) {
-		RCLCPP_ERROR(get_logger(), "Failed to receive next goal: %s", ex.what());
-	}
+	auto response = future.get();
+	current_goal_ = response->goal;
+	current_goal_.header.frame_id = current_goal_.header.frame_id.empty() ? global_frame_ : current_goal_.header.frame_id;
+	has_goal_ = true;
+	moving_ = true;
 }
 
 void WombatNode::control_timer_callback()
@@ -113,11 +85,7 @@ bool WombatNode::current_pose(geometry_msgs::msg::PoseStamped & pose)
 		pose.pose.position.z = transform.transform.translation.z;
 		pose.pose.orientation = transform.transform.rotation;
 		return true;
-	} catch (const tf2::TransformException & error) {
-		RCLCPP_WARN_THROTTLE(
-			get_logger(), *get_clock(), 5000,
-			"Waiting for %s -> %s transform: %s",
-			global_frame_.c_str(), robot_base_frame_.c_str(), error.what());
+	} catch (const tf2::TransformException &) {
 		return false;
 	}
 }

@@ -29,9 +29,6 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   DEPENDENCIES geometry_msgs std_msgs
 )
 
-add_library(wombatprocessing src/wombat/wombat_processing.cpp)
-ament_target_dependencies(wombatprocessing rclcpp geometry_msgs)
-
 add_executable(wombat_node src/wombat/wombat_node.cpp)
 ament_target_dependencies(
   wombat_node
@@ -43,7 +40,6 @@ ament_target_dependencies(
   tf2_geometry_msgs
 )
 rosidl_target_interfaces(wombat_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
-target_link_libraries(wombat_node wombatprocessing)
 
 add_executable(mission_node src/mission_node.cpp)
 ament_target_dependencies(
@@ -60,7 +56,6 @@ rosidl_target_interfaces(mission_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 install(TARGETS
   wombat_node
   mission_node
-  wombatprocessing
   DESTINATION lib/${PROJECT_NAME})
 
 install(
@@ -81,5 +76,4 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
-ament_export_dependencies(rosidl_default_runtime)
 ament_package()

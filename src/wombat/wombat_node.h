@@ -26,12 +26,12 @@ private:
 	static double normalize_yaw(double yaw);
 	static double quaternion_yaw(const geometry_msgs::msg::Quaternion & orientation);
 
-	std::string global_frame_;
-	std::string robot_base_frame_;
-	double linear_speed_;
-	double angular_speed_;
-	double goal_tolerance_;
-	double turn_tolerance_;
+	const std::string global_frame_ = "map";
+	const std::string robot_base_frame_ = "base_link";
+	const double linear_speed_ = 0.5;
+	const double angular_speed_ = 0.8;
+	const double goal_tolerance_ = 0.25;
+	const double turn_tolerance_ = 0.08;
 
 	bool moving_{false};
 	bool has_goal_{false};
