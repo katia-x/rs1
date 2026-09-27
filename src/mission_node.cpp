@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 
+// Configure mission parameters, subscriptions, the goal service, and TF.
 MissionNode::MissionNode()
 : Node("mission_node")
 {
@@ -28,6 +29,7 @@ MissionNode::MissionNode()
 	RCLCPP_INFO(get_logger(), "Mission service ready; waiting for region and weed data");
 }
 
+// Replace the current search region and rebuild its waypoint pattern.
 void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr message)
 {
 	if (message->poses.empty()) {
@@ -38,15 +40,18 @@ void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr
 	RCLCPP_INFO(get_logger(), "Region updated with %zu vertices", region_vertices_.size());
 }
 
+// Replace the stored weed detections with the latest perception snapshot.
 void MissionNode::weed_callback(const rs1::msg::PlantDetectionArray::SharedPtr message)
 {
 	weeds_ = message->detections;
 }
 
+// Look up Wombat's current pose in the global planning frame.
 bool MissionNode::current_pose(geometry_msgs::msg::PoseStamped & pose)
 {
 	try {
 		const auto transform = tf_buffer_->lookupTransform(
+// Build alternating vertical search lanes across the region's bounding box.
 			global_frame_, wombat_base_frame_, tf2::TimePointZero);
 		pose.header = transform.header;
 		pose.pose.position.x = transform.transform.translation.x;
@@ -108,6 +113,8 @@ void MissionNode::build_search_lines()
 	}
 }
 
+// Compute and return the next short-range goal: first approach the initial
+// lane point, then prioritize a nearby weed or continue along the active lane.
 bool MissionNode::serve_next_goal(
 	const std::shared_ptr<rs1::srv::WombatNextGoal::Request> request,
 	std::shared_ptr<rs1::srv::WombatNextGoal::Response> response)
@@ -186,6 +193,7 @@ bool MissionNode::serve_next_goal(
 	return true;
 }
 
+// Return the planar distance between two points.
 double MissionNode::distance(
 	const geometry_msgs::msg::Point & first,
 	const geometry_msgs::msg::Point & second)
@@ -193,6 +201,7 @@ double MissionNode::distance(
 	return std::hypot(first.x - second.x, first.y - second.y);
 }
 
+// Start ROS, construct the mission node, process callbacks, and shut down.
 int main(int argc, char ** argv)
 {
 	rclcpp::init(argc, argv);

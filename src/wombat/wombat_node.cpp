@@ -7,6 +7,8 @@
 
 using namespace std::chrono_literals;
 
+// Create Wombat's goal client, velocity publisher, TF listener, and control
+// timer, then request the first mission goal.
 WombatNode::WombatNode() : Node("wombat_node")
 {
 	goal_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
@@ -17,6 +19,8 @@ WombatNode::WombatNode() : Node("wombat_node")
 	request_next_goal();
 }
 
+// Ask the mission node for a goal without blocking the control loop. The
+// response is delivered to handle_goal_response when the service replies.
 geometry_msgs::msg::PoseStamped WombatNode::get_next_goal()
 {
 	if (!goal_client_->wait_for_service(1s)) {
@@ -29,6 +33,7 @@ geometry_msgs::msg::PoseStamped WombatNode::get_next_goal()
 	(void)future;
 }
 
+// Store the returned goal and enable motion after a successful service reply.
 void WombatNode::handle_goal_response(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future)
 {
 	auto response = future.get();
@@ -38,6 +43,8 @@ void WombatNode::handle_goal_response(rclcpp::Client<rs1::srv::WombatNextGoal>::
 	moving_ = true;
 }
 
+// Run the proportional-style point-to-point controller at each timer tick:
+// turn toward the goal, drive forward, or request the next goal when reached.
 void WombatNode::control_timer_callback()
 {
 	if (!moving_ || !has_goal_) {
@@ -74,6 +81,7 @@ void WombatNode::control_timer_callback()
 	publish_cmd_vel(linear_speed_, 0.0);
 }
 
+// Read the robot pose from TF in the configured global frame.
 bool WombatNode::current_pose(geometry_msgs::msg::PoseStamped & pose)
 {
 	try {
@@ -90,6 +98,7 @@ bool WombatNode::current_pose(geometry_msgs::msg::PoseStamped & pose)
 	}
 }
 
+// Publish planar linear and angular velocity commands to the robot.
 void WombatNode::publish_cmd_vel(double linear_speed, double angular_speed)
 {
 	geometry_msgs::msg::Twist msg;
@@ -98,6 +107,7 @@ void WombatNode::publish_cmd_vel(double linear_speed, double angular_speed)
 	cmd_vel_pub_->publish(msg);
 }
 
+// Wrap an angle into the interval [-pi, pi].
 double WombatNode::normalize_yaw(double yaw)
 {
 	while (yaw > M_PI) {
@@ -109,6 +119,7 @@ double WombatNode::normalize_yaw(double yaw)
 	return yaw;
 }
 
+// Convert a quaternion orientation into its planar yaw angle.
 double WombatNode::quaternion_yaw(const geometry_msgs::msg::Quaternion & orientation)
 {
 	tf2::Quaternion q;
