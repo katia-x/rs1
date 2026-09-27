@@ -25,28 +25,21 @@ private:
 	void weed_callback(const rs1::msg::PlantDetectionArray::SharedPtr message);
 	bool current_pose(geometry_msgs::msg::PoseStamped & pose);
 	void build_search_lines();
-	geometry_msgs::msg::PoseStamped next_search_goal();
 	bool serve_next_goal(
 		const std::shared_ptr<rs1::srv::WombatNextGoal::Request> request,
 		std::shared_ptr<rs1::srv::WombatNextGoal::Response> response);
 	static double distance(const geometry_msgs::msg::Point & first, const geometry_msgs::msg::Point & second);
-	static double point_to_segment_distance(
-		const geometry_msgs::msg::Point & point,
-		const geometry_msgs::msg::Point & segment_start,
-		const geometry_msgs::msg::Point & segment_end);
 
 	std::string global_frame_;
 	std::string wombat_base_frame_;
 	double camera_width_of_view_;
-	double lane_overlap_;
 	double search_goal_distance_;
 	bool search_line_assignment_alternation{false};
-	bool initial_search_point_reached_{false};
 	std::size_t search_goal_index_{0};
 	std::vector<geometry_msgs::msg::Pose> region_vertices_;
 	std::vector<rs1::msg::PlantDetection> weeds_;
 	std::vector<geometry_msgs::msg::PoseStamped> search_lines_;
-
+	double location_tolerance_{0.25};
 	rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr region_subscription_;
 	rclcpp::Subscription<rs1::msg::PlantDetectionArray>::SharedPtr weed_subscription_;
 	rclcpp::Service<rs1::srv::WombatNextGoal>::SharedPtr next_goal_service_;

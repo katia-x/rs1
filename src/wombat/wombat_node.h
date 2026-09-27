@@ -30,7 +30,7 @@ private:
 	const std::string robot_base_frame_ = "base_link";
 	const double linear_speed_ = 0.5;
 	const double angular_speed_ = 0.8;
-	const double goal_tolerance_ = 0.25;
+	const double goal_tolerance_ = 0.2;
 	const double turn_tolerance_ = 0.08;
 
 	bool moving_{false};

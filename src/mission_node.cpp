@@ -10,7 +10,6 @@ MissionNode::MissionNode()
 	global_frame_ = declare_parameter("global_frame", "map");
 	wombat_base_frame_ = declare_parameter("wombat_base_frame", "base_link");
 	camera_width_of_view_ = declare_parameter("camera_width_of_view", 1.0);
-	lane_overlap_ = declare_parameter("lane_overlap", 0.5);
 	search_goal_distance_ = declare_parameter("search_goal_distance", 1.0);
 
 	region_subscription_ = create_subscription<geometry_msgs::msg::PoseArray>(
@@ -35,7 +34,6 @@ void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr
 		return;
 	}
 	region_vertices_ = message->poses;
-	initial_search_point_reached_ = false;
 	build_search_lines();
 	RCLCPP_INFO(get_logger(), "Region updated with %zu vertices", region_vertices_.size());
 }
@@ -67,14 +65,9 @@ bool MissionNode::current_pose(geometry_msgs::msg::PoseStamped & pose)
 
 void MissionNode::build_search_lines()
 {
-	if (region_vertices_.size() < 4) {
-		search_lines_.clear();
-		return;
-	}
-
 	search_lines_.clear();
 	search_goal_index_ = 0;
-	initial_search_point_reached_ = false;
+
 	std::vector<double> xs;
 	std::vector<double> ys;
 	for (const auto & vertex : region_vertices_) {
@@ -93,15 +86,15 @@ void MissionNode::build_search_lines()
 	line_start.pose.position.z = 0.0;
 	line_start.pose.orientation.w = 1.0;
 
-	search_line_assignment_alternation = false;
+	search_line_assignment_alternation = false; //initial state (not a configuration option)
 
-	for (double y = min_y; y <= max_y + 1e-6; y += line_spacing) {
+	for (double x = min_x; x <= max_x + 1e-6; x += line_spacing) {
 		geometry_msgs::msg::PoseStamped start = line_start;
-		start.pose.position.x = min_x;
-		start.pose.position.y = y;
+		start.pose.position.y = min_y;
+		start.pose.position.x = x;
 		geometry_msgs::msg::PoseStamped end = line_start;
-		end.pose.position.x = max_x;
-		end.pose.position.y = y;
+		end.pose.position.y = max_y;
+		end.pose.position.x = x;
 
 		if (search_line_assignment_alternation){
 			search_lines_.push_back(end);
@@ -131,95 +124,65 @@ bool MissionNode::serve_next_goal(
 		response->goal.pose.position.y = 0.0;
 		return true;
 	}
-
-	auto line_start = search_lines_[search_goal_index_].pose.position;
-	auto line_end = search_lines_[search_goal_index_ + 1].pose.position;
-	double line_dx = line_end.x - line_start.x;
-	double line_dy = line_end.y - line_start.y;
-	double line_length = std::hypot(line_dx, line_dy);
-	if (line_length == 0.0) {
-		response->goal.pose.position = line_end;
+	if (search_lines_.empty()) {
 		return true;
 	}
 
 	// Before starting the search, drive all the way to the first point of the
 	// first lane. Weeds and lookahead are ignored during this initial approach.
-	if (!initial_search_point_reached_) {
-		const double distance_to_start = std::hypot(
-			robot_pose.pose.position.x - line_start.x,
-			robot_pose.pose.position.y - line_start.y);
-		if (distance_to_start > 0.25) {
-			response->goal.pose.position = line_start;
-			return true;
-		}
-		initial_search_point_reached_ = true;
+	if (search_goal_index_ == 0) {
+		response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
+		response->goal.pose.position.y = search_lines_[search_goal_index_].pose.position.y;
+		search_goal_index_++;
+		return true;
 	}
 
-	line_dx /= line_length;
-	line_dy /= line_length;
-	double robot_progress = std::clamp(
-		(robot_pose.pose.position.x - line_start.x) * line_dx +
-		(robot_pose.pose.position.y - line_start.y) * line_dy,
-		0.0, line_length);
-	if (robot_progress >= line_length - 0.05) {
-		search_goal_index_ += 2;
-		if (search_goal_index_ + 1 >= search_lines_.size()) {
-			search_goal_index_ = 0;
-		}
-		line_start = search_lines_[search_goal_index_].pose.position;
-		line_end = search_lines_[search_goal_index_ + 1].pose.position;
-		line_dx = line_end.x - line_start.x;
-		line_dy = line_end.y - line_start.y;
-		line_length = std::hypot(line_dx, line_dy);
-		if (line_length == 0.0) {
-			response->goal.pose.position = line_end;
-			return true;
-		}
-		line_dx /= line_length;
-		line_dy /= line_length;
-		robot_progress = std::clamp(
-			(robot_pose.pose.position.x - line_start.x) * line_dx +
-			(robot_pose.pose.position.y - line_start.y) * line_dy,
-			0.0, line_length);
-	}
 	const double lane_half_width = camera_width_of_view_ * 0.25;
 	const double lookahead = std::max(0.0, search_goal_distance_);
 
 	// Choose the closest weed ahead on this lane, provided it is inside half
 	// the distance between adjacent search lines and inside the lookahead.
-	std::size_t selected_weed = weeds_.size();
-	double selected_progress = std::numeric_limits<double>::max();
-	for (std::size_t index = 0; index < weeds_.size(); ++index) {
-		const auto & weed = weeds_[index].pose.position;
-		const double weed_progress =
-			(weed.x - line_start.x) * line_dx + (weed.y - line_start.y) * line_dy;
-		const double lateral_distance = std::abs(
-			(weed.x - line_start.x) * line_dy - (weed.y - line_start.y) * line_dx);
-		if (weed_progress > robot_progress &&
-			weed_progress <= std::min(line_length, robot_progress + lookahead) &&
-			lateral_distance <= lane_half_width &&
-			weed_progress < selected_progress) {
-			selected_weed = index;
-			selected_progress = weed_progress;
+	double miny;
+	double maxy;
+	double minx = search_lines_[search_goal_index_].pose.position.x - lane_half_width;
+	double maxx = search_lines_[search_goal_index_].pose.position.x + lane_half_width;
+	if (robot_pose.pose.position.y < search_lines_[search_goal_index_].pose.position.y) {
+		miny = robot_pose.pose.position.y;
+		maxy = robot_pose.pose.position.y + search_goal_distance_;
+	} else {
+		miny = robot_pose.pose.position.y - search_goal_distance_;
+		maxy = robot_pose.pose.position.y;
+	}
+
+	std::optional<std::size_t> selected_weed_index;
+	for (std::size_t i = 0; i < weeds_.size(); ++i) {
+		const auto & w = weeds_[i];
+		if (w.pose.position.x < maxx && w.pose.position.x > minx && w.pose.position.y < maxy && w.pose.position.y > miny) {
+			if (!selected_weed_index.has_value()) {
+				selected_weed_index = i;
+			} else if (std::abs(w.pose.position.y - robot_pose.pose.position.y) < std::abs(weeds_[selected_weed_index.value()].pose.position.y - robot_pose.pose.position.y)) {
+				selected_weed_index = i;
+			}
 		}
 	}
 
-	if (selected_weed < weeds_.size()) {
-		response->goal.pose.position = weeds_[selected_weed].pose.position;
-		response->goal.pose.orientation.w = 1.0;
-		response->is_weed = true;
-		return true;
+	if (!selected_weed_index.has_value()) {
+		response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
+		if (robot_pose.pose.position.y < search_lines_[search_goal_index_].pose.position.y) {
+			response->goal.pose.position.y = robot_pose.pose.position.y + search_goal_distance_;
+		} else {
+			response->goal.pose.position.y = robot_pose.pose.position.y - search_goal_distance_;
+		}
+	} else {
+		response->goal.pose.position = weeds_[selected_weed_index.value()].pose.position;
 	}
 
-	// No weed is ready for inspection, so return a point lookahead metres
-	// along the current lane, stopping at the lane endpoint.
-	const double goal_progress = std::min(line_length, robot_progress + lookahead);
-	response->goal.pose.position.x = line_start.x + goal_progress * line_dx;
-	response->goal.pose.position.y = line_start.y + goal_progress * line_dy;
-	const double heading = std::atan2(line_dy, line_dx);
-	response->goal.pose.orientation.z = std::sin(heading / 2.0);
-	response->goal.pose.orientation.w = std::cos(heading / 2.0);
-
+	if (distance(search_lines_[search_goal_index_].pose.position, robot_pose.pose.position) < location_tolerance_) {
+		search_goal_index_++;
+		if (search_goal_index_ >= search_lines_.size()) {
+			search_goal_index_ = 0;
+		}
+	}
 	return true;
 }
 
@@ -228,27 +191,6 @@ double MissionNode::distance(
 	const geometry_msgs::msg::Point & second)
 {
 	return std::hypot(first.x - second.x, first.y - second.y);
-}
-
-double MissionNode::point_to_segment_distance(
-	const geometry_msgs::msg::Point & point,
-	const geometry_msgs::msg::Point & segment_start,
-	const geometry_msgs::msg::Point & segment_end)
-{
-	const double dx = segment_end.x - segment_start.x;
-	const double dy = segment_end.y - segment_start.y;
-	const double length_squared = dx * dx + dy * dy;
-	if (length_squared == 0.0) {
-		return distance(point, segment_start);
-	}
-	const double projection = std::clamp(
-		((point.x - segment_start.x) * dx + (point.y - segment_start.y) * dy) / length_squared,
-		0.0,
-		1.0);
-	geometry_msgs::msg::Point nearest = segment_start;
-	nearest.x += projection * dx;
-	nearest.y += projection * dy;
-	return distance(point, nearest);
 }
 
 int main(int argc, char ** argv)
