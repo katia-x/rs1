@@ -36,11 +36,13 @@ private:
 		const geometry_msgs::msg::Point & segment_end);
 
 	std::string global_frame_;
-	std::string robot_base_frame_;
+	std::string wombat_base_frame_;
 	double camera_width_of_view_;
 	double lane_overlap_;
-	std::size_t lane_index_{0};
-	bool forward_direction_{true};
+	double search_goal_distance_;
+	bool search_line_assignment_alternation{false};
+	bool initial_search_point_reached_{false};
+	std::size_t search_goal_index_{0};
 	std::vector<geometry_msgs::msg::Pose> region_vertices_;
 	std::vector<rs1::msg::PlantDetection> weeds_;
 	std::vector<geometry_msgs::msg::PoseStamped> search_lines_;

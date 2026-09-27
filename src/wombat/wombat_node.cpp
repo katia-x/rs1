@@ -17,7 +17,7 @@ WombatNode::WombatNode() : Node("wombat_node")
 	request_next_goal();
 }
 
-void WombatNode::request_next_goal()
+geometry_msgs::msg::PoseStamped WombatNode::get_next_goal()
 {
 	if (!goal_client_->wait_for_service(1s)) {
 		return;
