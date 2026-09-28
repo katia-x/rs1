@@ -13,15 +13,9 @@ MissionNode::MissionNode()
 	camera_width_of_view_ = declare_parameter("camera_width_of_view", 1.0);
 	search_goal_distance_ = declare_parameter("search_goal_distance", 1.0);
 
-	region_subscription_ = create_subscription<geometry_msgs::msg::PoseArray>(
-		"/region", rclcpp::QoS(10),
-		std::bind(&MissionNode::region_callback, this, std::placeholders::_1));
-	weed_subscription_ = create_subscription<rs1::msg::PlantDetectionArray>(
-		"/plant_detection/weeds", rclcpp::QoS(10),
-		std::bind(&MissionNode::weed_callback, this, std::placeholders::_1));
-	next_goal_service_ = create_service<rs1::srv::WombatNextGoal>(
-		"wombat_next_goal",
-		std::bind(&MissionNode::serve_next_goal, this, std::placeholders::_1, std::placeholders::_2));
+	region_subscription_ = create_subscription<geometry_msgs::msg::PoseArray>("/region", rclcpp::QoS(10), std::bind(&MissionNode::region_callback, this, std::placeholders::_1));
+	weed_subscription_ = create_subscription<rs1::msg::PlantDetectionArray>("/plant_detection/weeds", rclcpp::QoS(10), std::bind(&MissionNode::weed_callback, this, std::placeholders::_1));
+	next_goal_service_ = create_service<rs1::srv::WombatNextGoal>("wombat_next_goal", std::bind(&MissionNode::serve_next_goal, this, std::placeholders::_1, std::placeholders::_2));
 
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
 	tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -115,24 +109,27 @@ void MissionNode::build_search_lines()
 
 // Compute and return the next short-range goal: first approach the initial
 // lane point, then prioritize a nearby weed or continue along the active lane.
-bool MissionNode::serve_next_goal(
+void MissionNode::serve_next_goal(
 	const std::shared_ptr<rs1::srv::WombatNextGoal::Request> request,
 	std::shared_ptr<rs1::srv::WombatNextGoal::Response> response)
 {
 	(void)request;
 
 	response->is_weed = false;
+	response->success = true;
 	response->goal.header.frame_id = global_frame_;
 	response->goal.pose.orientation.w = 1.0;
 
 	geometry_msgs::msg::PoseStamped robot_pose;
 	if (!current_pose(robot_pose)) {
+		response->success = false;
 		response->goal.pose.position.x = 0.0;
 		response->goal.pose.position.y = 0.0;
-		return true;
+		return;
 	}
 	if (search_lines_.empty()) {
-		return true;
+		response->success = false;
+		return;
 	}
 
 	// Before starting the search, drive all the way to the first point of the
@@ -141,7 +138,7 @@ bool MissionNode::serve_next_goal(
 		response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
 		response->goal.pose.position.y = search_lines_[search_goal_index_].pose.position.y;
 		search_goal_index_++;
-		return true;
+		return;
 	}
 
 	const double lane_half_width = camera_width_of_view_ * 0.25;
@@ -190,7 +187,7 @@ bool MissionNode::serve_next_goal(
 			search_goal_index_ = 0;
 		}
 	}
-	return true;
+	return;
 }
 
 // Return the planar distance between two points.

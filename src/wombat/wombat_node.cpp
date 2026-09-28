@@ -27,7 +27,16 @@ void WombatNode::request_next_goal()
 // Forward Mission's goal to Nav2, which handles path planning and control.
 void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future)
 {
-	auto response = future.get();
+	std::shared_ptr<rs1::srv::WombatNextGoal::Response> response;
+
+	if (!response->success) {
+		RCLCPP_WARN(get_logger(), "Mission has no goal available yet");
+		request_next_goal();
+		return;
+	}
+
+	response = future.get();
+
 	response->goal.header.frame_id = response->goal.header.frame_id.empty() ? global_frame_ : response->goal.header.frame_id;
 	response->goal.header.stamp = now();
 

@@ -1,3 +1,4 @@
 ---
 geometry_msgs/PoseStamped goal
 bool is_weed
+bool success

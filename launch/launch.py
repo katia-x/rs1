@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch the complete RS1 system from one composition point."""
+"""Launch the shared simulation environment and RViz."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
@@ -9,25 +9,9 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-	# Every subsystem included below receives this shared simulation-time value.
-	# Future team members can add another launch include 
 	use_sim_time = LaunchConfiguration('use_sim_time')
-	namespace = LaunchConfiguration('namespace')
-	package_share = FindPackageShare('rs1')
-
-	# This list is the integration point for the complete RS1 system. Keeping
-	# each subsystem in its own file preserves clear ownership as it grows.
-	subsystem_launches = [
-		IncludeLaunchDescription(
-			PythonLaunchDescriptionSource(PathJoinSubstitution([
-				package_share, 'launch', 'wombat_launch.py'
-			])),
-			launch_arguments={
-				'use_sim_time': use_sim_time,
-				'namespace': namespace,
-			}.items(),
-		),
-	]
+	world = LaunchConfiguration('world')
+	rviz = LaunchConfiguration('rviz')
 
 	return LaunchDescription([
 		DeclareLaunchArgument(
@@ -36,9 +20,29 @@ def generate_launch_description():
 			description='Use simulation time for every launched subsystem.',
 		),
 		DeclareLaunchArgument(
-			'namespace',
-			default_value='husky1',
-			description='Robot namespace used by the Wombat stack.',
+			'world',
+			default_value='simple_trees',
+			description='Simulation world to load.',
 		),
-		*subsystem_launches,
+		DeclareLaunchArgument(
+			'rviz',
+			default_value='True',
+			description='Launch RViz with the simulation.',
+		),
+		IncludeLaunchDescription(
+			PythonLaunchDescriptionSource(PathJoinSubstitution([
+				FindPackageShare('41068_ignition_bringup'),
+				'launch',
+				'41068_ignition.launch.py',
+			])),
+			launch_arguments={
+				'use_sim_time': use_sim_time,
+				'rviz': rviz,
+				'world': world,
+				'nav2': 'False',
+				'slam': 'False',
+				'husky': 'True',
+				'parrot': 'False',
+			}.items(),
+		),
 	])

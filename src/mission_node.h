@@ -25,7 +25,7 @@ private:
 	void weed_callback(const rs1::msg::PlantDetectionArray::SharedPtr message);
 	bool current_pose(geometry_msgs::msg::PoseStamped & pose);
 	void build_search_lines();
-	bool serve_next_goal(
+	void serve_next_goal(
 		const std::shared_ptr<rs1::srv::WombatNextGoal::Request> request,
 		std::shared_ptr<rs1::srv::WombatNextGoal::Response> response);
 	static double distance(const geometry_msgs::msg::Point & first, const geometry_msgs::msg::Point & second);

@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Launch the simple direct-drive Wombat mission stack."""
+"""Launch Nav2 and the Wombat mission stack for one robot."""
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
+from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
@@ -12,6 +14,8 @@ def generate_launch_description():
     namespace = LaunchConfiguration('namespace')
     global_frame = LaunchConfiguration('global_frame')
     robot_base_frame = LaunchConfiguration('robot_base_frame')
+    nav2 = LaunchConfiguration('nav2')
+    slam = LaunchConfiguration('slam')
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -26,6 +30,26 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'robot_base_frame', default_value='husky1_base_link',
             description='Robot base frame used by Mission.'),
+        DeclareLaunchArgument(
+            'nav2', default_value='True',
+            description='Launch Nav2 for the Wombat robot.'),
+        DeclareLaunchArgument(
+            'slam', default_value='False',
+            description='Launch SLAM Toolbox independently of Nav2.'),
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource(PathJoinSubstitution([
+                FindPackageShare('41068_ignition_bringup'),
+                'launch',
+                '41068_navigation.launch.py',
+            ])),
+            launch_arguments={
+                'use_sim_time': use_sim_time,
+                'namespace': namespace,
+                'config_filename_suffix': '_husky1',
+                'nav2': nav2,
+                'slam': slam,
+            }.items(),
+        ),
         Node(
             package='rs1',
             executable='mission_node',
