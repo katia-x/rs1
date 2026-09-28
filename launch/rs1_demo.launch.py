@@ -283,7 +283,7 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument(
         'headless_rendering', default_value='False',
         description='Use EGL for camera rendering without a display'))
-    for robot, defaults in [('husky', ('0.0', '0.0', '1.0', '0.0')),
+    for robot, defaults in [('husky', ('-0.5', '0.0', '0.5', '0.0')),
                             ('parrot', ('2.0', '0.0', '1.5', '0.0'))]:
         for axis, value in zip(('x', 'y', 'z', 'yaw'), defaults):
             ld.add_action(DeclareLaunchArgument(
