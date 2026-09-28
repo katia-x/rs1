@@ -19,7 +19,7 @@ find_package(nav_msgs REQUIRED)
 add_library(glider_processing
   src/glider/glider_processing.cpp
 )
-target_include_directories(glider_processing public
+target_include_directories(glider_processing PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
   $<INSTALL_INTERFACE:include>
 )
@@ -30,7 +30,7 @@ target_include_directories(glider_processing public
 add_executable(glider_node
   src/glider/glider_node.cpp
 )
-target_include_directories(glider_node public
+target_include_directories(glider_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
   $<INSTALL_INTERFACE:include>
 )
