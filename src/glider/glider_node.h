@@ -59,6 +59,8 @@ private:
 
   rclcpp::Publisher<
     std_msgs::msg::String>::SharedPtr status_pub_;
+    
+  std::string last_status_;
 
 
   // Control timer

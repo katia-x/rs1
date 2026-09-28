@@ -306,12 +306,16 @@ void GliderNode::controlLoop()
 
 
   // Publish state/status
+  if (status != last_status_) {
+
   std_msgs::msg::String status_msg;
 
-  status_msg.data =
-    status;
+  status_msg.data = status;
 
   status_pub_->publish(status_msg);
+
+  last_status_ = status;
+}
 }
 
 
