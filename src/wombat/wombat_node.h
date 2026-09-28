@@ -33,7 +33,6 @@ private:
 	const double goal_tolerance_ = 0.2;
 	const double turn_tolerance_ = 0.08;
 
-	bool moving_{false};
 	bool has_goal_{false};
 	geometry_msgs::msg::PoseStamped current_goal_;
 

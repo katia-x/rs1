@@ -1,4 +1,4 @@
-#include "wombat/wombat_node.h"
+#include "wombat_node.h"
 
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
@@ -21,15 +21,14 @@ WombatNode::WombatNode() : Node("wombat_node")
 
 // Ask the mission node for a goal without blocking the control loop. The
 // response is delivered to handle_goal_response when the service replies.
-geometry_msgs::msg::PoseStamped WombatNode::get_next_goal()
+void WombatNode::request_next_goal()
 {
 	if (!goal_client_->wait_for_service(1s)) {
 		return;
 	}
 
 	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
-	auto future = goal_client_->async_send_request(
-		request, std::bind(&WombatNode::handle_goal_response, this, std::placeholders::_1));
+	auto future = goal_client_->async_send_request(request, std::bind(&WombatNode::handle_goal_response, this, std::placeholders::_1));
 	(void)future;
 }
 
@@ -40,14 +39,13 @@ void WombatNode::handle_goal_response(rclcpp::Client<rs1::srv::WombatNextGoal>::
 	current_goal_ = response->goal;
 	current_goal_.header.frame_id = current_goal_.header.frame_id.empty() ? global_frame_ : current_goal_.header.frame_id;
 	has_goal_ = true;
-	moving_ = true;
 }
 
 // Run the proportional-style point-to-point controller at each timer tick:
 // turn toward the goal, drive forward, or request the next goal when reached.
 void WombatNode::control_timer_callback()
 {
-	if (!moving_ || !has_goal_) {
+	if (!has_goal_) {
 		return;
 	}
 
@@ -63,7 +61,6 @@ void WombatNode::control_timer_callback()
 
 	if (distance <= goal_tolerance_) {
 		publish_cmd_vel(0.0, 0.0);
-		moving_ = false;
 		has_goal_ = false;
 		request_next_goal();
 		return;
