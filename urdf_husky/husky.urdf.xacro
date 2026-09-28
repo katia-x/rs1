@@ -3,9 +3,9 @@
   <xacro:arg name="prefix" default=""/>
   <xacro:property name="prefix" value="$(arg prefix)"/>
 
-  <xacro:include filename="$(find 41068_ignition_bringup)/urdf_husky/common_properties.urdf.xacro"/>
-  <xacro:include filename="$(find 41068_ignition_bringup)/urdf_husky/husky.gazebo.xacro"/>
-  <xacro:include filename="$(find 41068_ignition_bringup)/urdf_husky/wheel.urdf.xacro"/>
+  <xacro:include filename="$(find rs1)/urdf_husky/common_properties.urdf.xacro"/>
+  <xacro:include filename="$(find rs1)/urdf_husky/husky.gazebo.xacro"/>
+  <xacro:include filename="$(find rs1)/urdf_husky/wheel.urdf.xacro"/>
 
   <xacro:property name="r200_cam_rgb_px" value="0.005"/>
   <xacro:property name="r200_cam_rgb_py" value="0.018"/>
@@ -16,41 +16,41 @@
     <visual>
       <origin xyz="0 0 0.0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_husky/meshes/base_link.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_husky/meshes/base_link.dae"/>
       </geometry>
       <material name="black"/>
     </visual>
     <visual name="base_link_fixed_joint_lump__front_bumper_link_visual_3">
       <origin xyz="0.48 0 0.091" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_husky/meshes/bumper.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_husky/meshes/bumper.dae"/>
       </geometry>
       <material name="black"/>
     </visual>
     <visual name="base_link_fixed_joint_lump__rear_bumper_link_visual_4">
       <origin xyz="-0.48 0 0.091" rpy="0 0 3.14159"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_husky/meshes/bumper.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_husky/meshes/bumper.dae"/>
       </geometry>
       <material name="black"/>
     </visual>
     <visual name="base_link_fixed_joint_lump__top_chassis_link_visual_5">
       <origin xyz="0 0 0" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_husky/meshes/top_chassis.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_husky/meshes/top_chassis.dae"/>
       </geometry>
     </visual>
     <visual name="base_link_fixed_joint_lump__top_plate_link_visual_6">
       <origin xyz="0.0812 0 0.245" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_husky/meshes/top_plate.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_husky/meshes/top_plate.dae"/>
       </geometry>
       <material name="black"/>
     </visual>
     <visual name="base_link_fixed_joint_lump__arch_visual_7">
       <origin xyz="0.0012 0 0.251" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_husky/meshes/jpl04_arch_nosensor.stl"/>
+        <mesh filename="file://$(find rs1)/urdf_husky/meshes/jpl04_arch_nosensor.stl"/>
       </geometry>
       <material name="black"/>
     </visual>
@@ -76,7 +76,7 @@
     <collision name="base_link_fixed_joint_lump__top_plate_link_collision_3">
       <origin xyz="0.0812 0 0.245" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_husky/meshes/top_plate.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_husky/meshes/top_plate.dae"/>
       </geometry>
     </collision>
     <collision name="base_link_fixed_joint_lump__top_plate_link_collision_4">
@@ -184,4 +184,11 @@
   </joint>
   <link name="${prefix}camera_depth_optical_frame"/>
 
+  <!-- Simulated RGB and depth share the sensor origin (no physical baseline). -->
+  <joint name="${prefix}camera_optical_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="-1.5707963267948966 0 -1.5707963267948966"/>
+    <parent link="${prefix}camera_link"/>
+    <child link="${prefix}camera_optical_frame"/>
+  </joint>
+  <link name="${prefix}camera_optical_frame"/>
 </robot>

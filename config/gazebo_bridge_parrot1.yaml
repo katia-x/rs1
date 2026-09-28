@@ -30,14 +30,14 @@
 - ros_topic_name: "scan"
   gz_topic_name: "/model/parrot1/scan"
   ros_type_name: "sensor_msgs/msg/LaserScan"
-  gz_type_name: "gz.msgs.LaserScan"
+  gz_type_name: "ignition.msgs.LaserScan"
   direction: GZ_TO_ROS
 
 # Lidar: pointcloud
 - ros_topic_name: "scan/points"
   gz_topic_name: "/model/parrot1/scan/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
-  gz_type_name: "gz.msgs.PointCloudPacked"
+  gz_type_name: "ignition.msgs.PointCloudPacked"
   direction: GZ_TO_ROS
 
 # Camera: RGB
@@ -59,4 +59,11 @@
   gz_topic_name: "/model/parrot1/camera/points"
   ros_type_name: "sensor_msgs/msg/PointCloud2"
   gz_type_name: "ignition.msgs.PointCloudPacked"
+  direction: GZ_TO_ROS
+
+# RGB-D calibration for image interpretation and later rosbag recording.
+- ros_topic_name: 'camera/camera_info'
+  gz_topic_name: '/model/parrot1/camera/camera_info'
+  ros_type_name: 'sensor_msgs/msg/CameraInfo'
+  gz_type_name: 'ignition.msgs.CameraInfo'
   direction: GZ_TO_ROS

@@ -4,8 +4,8 @@
   <xacro:arg name="prefix" default=""/>
   <xacro:property name="prefix" value="$(arg prefix)"/>
   
-  <xacro:include filename="$(find 41068_ignition_bringup)/urdf_parrot/common_properties.urdf.xacro"/>
-  <xacro:include filename="$(find 41068_ignition_bringup)/urdf_parrot/parrot.gazebo.xacro"/>
+  <xacro:include filename="$(find rs1)/urdf_parrot/common_properties.urdf.xacro"/>
+  <xacro:include filename="$(find rs1)/urdf_parrot/parrot.gazebo.xacro"/>
 
   <xacro:property name="r200_cam_rgb_px" value="0.005"/>
   <xacro:property name="r200_cam_rgb_py" value="0.018"/>
@@ -30,31 +30,31 @@
     </collision> -->
     <visual name="hull">
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_parrot/meshes/hull.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_parrot/meshes/hull.dae"/>
       </geometry>
     </visual>
     <visual name="propeller_rr">
       <origin xyz="-0.09035 -0.11423 -0.00501" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_parrot/meshes/propeller_rr.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_parrot/meshes/propeller_rr.dae"/>
       </geometry>
     </visual>
     <visual name="propeller_rl">
       <origin xyz="0.09035 0.11452 -0.00501" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_parrot/meshes/propeller_rl.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_parrot/meshes/propeller_rl.dae"/>
       </geometry>
     </visual>
     <visual name="propeller_fr">
       <origin xyz="0.08456 -0.11435 -0.00501" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_parrot/meshes/propeller_fr.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_parrot/meshes/propeller_fr.dae"/>
       </geometry>
     </visual>
     <visual name="propeller_fl">
       <origin xyz="0.08456 0.11463 -0.00501" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="file://$(find 41068_ignition_bringup)/urdf_parrot/meshes/propeller_fl.dae"/>
+        <mesh filename="file://$(find rs1)/urdf_parrot/meshes/propeller_fl.dae"/>
       </geometry>
     </visual>
   </link>
@@ -143,4 +143,11 @@
   </joint>
   <link name="${prefix}camera_depth_optical_frame"/>
 
+  <!-- Simulated RGB and depth share the sensor origin (no physical baseline). -->
+  <joint name="${prefix}camera_optical_joint" type="fixed">
+    <origin xyz="0 0 0" rpy="-1.5707963267948966 0 -1.5707963267948966"/>
+    <parent link="${prefix}camera_link"/>
+    <child link="${prefix}camera_optical_frame"/>
+  </joint>
+  <link name="${prefix}camera_optical_frame"/>
 </robot>
