@@ -6,7 +6,7 @@
         <collision name="collision">
             <geometry>
               <mesh>
-		<uri>model://environment_combined/meshes/Environment_Combined.obj</uri>
+		<uri>model://worlds/meshes/Environment_Combined.obj</uri>
               </mesh>
             </geometry>
         </collision>
@@ -15,7 +15,7 @@
             <cast_shadows>true</cast_shadows>
             <geometry>
               <mesh>
-		<uri>model://environment_combined/meshes/Environment_Combined.obj</uri>
+		<uri>model://worlds/meshes/Environment_Combined.obj</uri>
               </mesh>
             </geometry>
         </visual>
