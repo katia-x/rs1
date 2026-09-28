@@ -20,8 +20,7 @@ void WombatNode::request_next_goal()
 	}
 
 	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
-	auto future = mission_client_->async_send_request(
-		request, std::bind(&WombatNode::handle_mission_goal, this, std::placeholders::_1));
+	auto future = mission_client_->async_send_request(request, std::bind(&WombatNode::handle_mission_goal, this, std::placeholders::_1));
 	(void)future;
 }
 
@@ -42,8 +41,7 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
 	options.goal_response_callback = std::bind(
 		&WombatNode::handle_nav_goal_response, this, std::placeholders::_1);
-	options.result_callback = std::bind(
-		&WombatNode::handle_nav_result, this, std::placeholders::_1);
+	options.result_callback = std::bind(&WombatNode::handle_nav_result, this, std::placeholders::_1);
 	(void)navigation_client_->async_send_goal(navigation_goal, options);
 }
 
