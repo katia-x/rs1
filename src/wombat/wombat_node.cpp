@@ -28,14 +28,19 @@ void WombatNode::request_next_goal()
 void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future)
 {
 	std::shared_ptr<rs1::srv::WombatNextGoal::Response> response;
+	try {
+		response = future.get();
+	} catch (const std::exception & error) {
+		RCLCPP_WARN(get_logger(), "Mission service call failed: %s", error.what());
+		request_next_goal();
+		return;
+	}
 
 	if (!response->success) {
 		RCLCPP_WARN(get_logger(), "Mission has no goal available yet");
 		request_next_goal();
 		return;
 	}
-
-	response = future.get();
 
 	response->goal.header.frame_id = response->goal.header.frame_id.empty() ? global_frame_ : response->goal.header.frame_id;
 	response->goal.header.stamp = now();
