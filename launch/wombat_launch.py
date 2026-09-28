@@ -25,7 +25,7 @@ def generate_launch_description():
             'namespace', default_value='husky1',
             description='Namespace for the simple mission stack.'),
         DeclareLaunchArgument(
-            'global_frame', default_value='husky1_map',
+            'global_frame', default_value='map',
             description='Global frame used by Mission and Nav2.'),
         DeclareLaunchArgument(
             'robot_base_frame', default_value='husky1_base_link',

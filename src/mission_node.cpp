@@ -9,7 +9,7 @@ MissionNode::MissionNode()
 : Node("mission_node")
 {
 	global_frame_ = declare_parameter("global_frame", "map");
-	wombat_base_frame_ = declare_parameter("wombat_base_frame", "base_link");
+	wombat_base_frame_ = declare_parameter("wombat_base_frame", "husky1_base_link");
 	camera_width_of_view_ = declare_parameter("camera_width_of_view", 1.0);
 	search_goal_distance_ = declare_parameter("search_goal_distance", 1.0);
 
@@ -27,6 +27,13 @@ MissionNode::MissionNode()
 void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr message)
 {
 	if (message->poses.empty()) {
+		return;
+	}
+	if (message->header.frame_id != global_frame_) {
+		RCLCPP_WARN(
+			get_logger(),
+			"Ignoring region in frame '%s'; expected '%s'",
+			message->header.frame_id.c_str(), global_frame_.c_str());
 		return;
 	}
 	region_vertices_ = message->poses;

@@ -4,7 +4,7 @@ using namespace std::chrono_literals;
 
 // Create the Mission service client and Nav2 action client.
 WombatNode::WombatNode() : Node("wombat_node"),
-	global_frame_(declare_parameter("global_frame", "husky1_map"))
+	global_frame_(declare_parameter("global_frame", "map"))
 {
 	mission_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(this, "navigate_to_pose");
