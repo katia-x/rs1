@@ -37,7 +37,6 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 	}
 
 	if (!response->success) {
-		RCLCPP_WARN(get_logger(), "Mission has no goal available yet");
 		request_next_goal();
 		return;
 	}
