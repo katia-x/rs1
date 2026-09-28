@@ -12,7 +12,7 @@ def generate_launch_description():
 	# Every subsystem included below receives this shared simulation-time value.
 	# Future team members can add another launch include 
 	use_sim_time = LaunchConfiguration('use_sim_time')
-	namespace = 'rs1'
+	namespace = LaunchConfiguration('namespace')
 	package_share = FindPackageShare('rs1')
 
 	# This list is the integration point for the complete RS1 system. Keeping
@@ -34,6 +34,11 @@ def generate_launch_description():
 			'use_sim_time',
 			default_value='True',
 			description='Use simulation time for every launched subsystem.',
+		),
+		DeclareLaunchArgument(
+			'namespace',
+			default_value='husky1',
+			description='Robot namespace used by the Wombat stack.',
 		),
 		*subsystem_launches,
 	])
