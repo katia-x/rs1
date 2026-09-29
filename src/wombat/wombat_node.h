@@ -29,6 +29,7 @@ private:
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedPtr mission_client_;
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
 	NavigateGoalHandle::SharedPtr active_goal_;
+	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
 };
 
 #endif

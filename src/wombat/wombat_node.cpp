@@ -7,7 +7,9 @@ WombatNode::WombatNode() : Node("wombat_node"),
 	global_frame_(declare_parameter("global_frame", "map"))
 {
 	mission_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
-	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(this, "navigate_to_pose");
+	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
+		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
+	mission_retry_timer_ = create_wall_timer(1s, std::bind(&WombatNode::request_next_goal, this));
 	request_next_goal();
 }
 

@@ -19,6 +19,13 @@ source install/setup.bash
 ros2 launch rs1 rs1_demo.launch.py
 ```
 
+For an end-to-end Mission and Wombat test with SLAM, Nav2 and one map-frame
+region publication:
+
+```bash
+ros2 launch rs1 mission_wombat_test.launch.py
+```
+
 See [simulation setup](docs/simulation_setup.md) for dependencies, RViz,
 teleoperation, spawn settings and RGB-D topics. Mission scaffold code is not
 compiled or launched yet.
