@@ -1,3 +1,11 @@
+/*ToDO:
+Read from /glider/sensor (through glider node) & compute where to send glider 
+to line up with cube.
+
+maybe can add a stopping point @ around a few metres above poo? and run /glider/sonar
+as a Service instead of a topic. So not running & computing continuously?
+*/
+
 #include "glider_processing.h"
 
 #include <algorithm>

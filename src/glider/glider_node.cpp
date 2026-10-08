@@ -1,3 +1,7 @@
+/*ToDO:
+Subscribe to /glider/sonar topic
+*/
+
 #include "glider_node.h"
 
 #include <chrono>
