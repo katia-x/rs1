@@ -1,0 +1,4 @@
+- Make a test launch file to test the glider flying over a few random cubes and finding the centre
+- Note: will need to figure out a way to fine centre of cube when cube is on an incline (very often in our world)
+- make a test to randomly generate poos around the map & pass position to glider (look into doing same for plant models & wombat)
+- Finish intergrating Sonar into glider for proper pickup
