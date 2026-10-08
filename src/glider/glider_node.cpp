@@ -24,6 +24,7 @@ GliderNode::GliderNode()
 
   this->declare_parameter("safe_height", 15.0);
   this->declare_parameter("pickup_height", 1.5);
+  this->declare_parameter("align_height", 4.0);
 
   this->declare_parameter("xy_tolerance", 0.4);
   this->declare_parameter("z_tolerance", 0.15);
@@ -56,6 +57,7 @@ GliderNode::GliderNode()
       home,
       this->get_parameter("safe_height").as_double(),
       this->get_parameter("pickup_height").as_double(),
+      this->get_parameter("align_height").as_double(),
       this->get_parameter("xy_tolerance").as_double(),
       this->get_parameter("z_tolerance").as_double());
 
@@ -123,6 +125,16 @@ GliderNode::GliderNode()
           _1));
 
 
+  // ---------------------------------------------------------
+  // Cube centre
+  // ---------------------------------------------------------
+  //
+  // Server client to ask for poo centre.
+  //
+  sonar_client_ = 
+    this->create_client<
+    rs1::srv::GetCubeCentre>(
+      "/glider/sonar");
   // ---------------------------------------------------------
   // Parrot velocity command
   // ---------------------------------------------------------

@@ -17,6 +17,13 @@ find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+
+#generate the cube centre hpp file
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "srv/GetCubeCentre.srv"
+  DEPENDENCIES geometry_msgs
+)
 
 # ---------------------------------------------------------------------------
 # Glider processing library (pure logic, no ROS)
@@ -47,6 +54,29 @@ ament_target_dependencies(glider_node
   sensor_msgs
   nav_msgs
 )
+rosidl_target_interfaces(glider_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+# ---------------------------------------------------------------------------
+# Sonar node 
+# ---------------------------------------------------------------------------
+add_executable(sonar_node
+  src/sensing/sonar.cpp
+)
+
+target_include_directories(sonar_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  $<INSTALL_INTERFACE:include>
+)
+
+ament_target_dependencies(sonar_node
+  rclcpp
+  geometry_msgs
+  sensor_msgs
+  nav_msgs
+)
+
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(sonar_node "${cpp_typesupport_target}")
 
 # ---------------------------------------------------------------------------
 # Install
@@ -54,6 +84,7 @@ ament_target_dependencies(glider_node
 install(TARGETS
   glider_processing
   glider_node
+  sonar_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
@@ -63,4 +94,5 @@ install(DIRECTORY launch config worlds urdf_husky urdf_parrot
   PATTERN "*.pyc" EXCLUDE
 )
 
+ament_export_dependencies(rosidl_default_runtime)
 ament_package()

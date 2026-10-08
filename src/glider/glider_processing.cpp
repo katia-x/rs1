@@ -17,11 +17,13 @@ GliderProcessing::GliderProcessing(
   const Pose & home,
   double safe_height,
   double pickup_height,
+  double align_height,
   double xy_tolerance,
   double z_tolerance)
 : home_(home),
   safe_height_(safe_height),
   pickup_height_(pickup_height),
+  align_height_(align_height),
   dropoff_height_(home.z),
   xy_tolerance_(xy_tolerance),
   z_tolerance_(z_tolerance),
@@ -129,6 +131,14 @@ GliderProcessing::tick()
 
     case State::DESCEND:
       handleDescend();
+      break;
+
+    case State::ALIGN:
+      handleAlign();
+      break;
+
+    case State::FINAL_DESCEND:
+      handleFinalDescend();
       break;
 
     case State::PICKUP:
@@ -245,134 +255,123 @@ void GliderProcessing::handleGotoPoo()
  * ---------------------------------------------------------
  * DESCEND
  * ---------------------------------------------------------
- *
- * Move straight down while continuously correcting XY
- * position.
- *
- * If a height sensor is available:
- *
- *     use sensor distance
- *
- * Otherwise:
- *
- *     temporarily use odometry
- *
- * The sensor version is what should eventually be used
- * for the real implementation.
  */
+
 void GliderProcessing::handleDescend()
 {
   if (current_goal_idx_ >= goals_.size()) {
-
     transition(State::RETURN_HOME);
-
     return;
   }
 
-  const Goal & goal =
-    goals_[current_goal_idx_];
-
-
-  // -------------------------------------------------------
-  // XY correction
-  // -------------------------------------------------------
-
-  const double x_error =
-    goal.pose.x - current_pose_.x;
-
-  const double y_error =
-    goal.pose.y - current_pose_.y;
-
-  command_.vx =
-    clamp(
-      kp_xy_ * x_error,
-      -max_xy_speed_,
-      max_xy_speed_);
-
-  command_.vy =
-    clamp(
-      kp_xy_ * y_error,
-      -max_xy_speed_,
-      max_xy_speed_);
-
-
-  // -------------------------------------------------------
-  // Height control
-  // -------------------------------------------------------
+  Pose xy_target = activeTargetXY();
+  command_.vx = clamp(kp_xy_ * (xy_target.x - current_pose_.x), -max_xy_speed_, max_xy_speed_);
+  command_.vy = clamp(kp_xy_ * (xy_target.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
 
   if (height_sensor_valid_) {
-
-    /*
-     * Sensor measures the distance between the Glider
-     * and the poo/ground.
-     */
-    const double height_error =
-      height_above_poo_ - pickup_height_;
-
-    /*
-     * Positive vz = climb
-     * Negative vz = descend
-     */
-    command_.vz =
-      clamp(
-        kp_z_ * height_error,
-        -max_z_speed_,
-        max_z_speed_);
-
-    status_msg_ =
-      "DESCEND: using height sensor";
+    const double height_error = height_above_poo_ - align_height_;
+    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+    status_msg_ = "DESCEND: sensor → align height";
 
     if (std::abs(height_error) <= z_tolerance_) {
-
       command_.vz = 0.0;
+      transition(State::ALIGN);
+    }
+  } else {
+    // odometry fallback (same idea as before)
+    const Goal & goal = goals_[current_goal_idx_];
+    const double target_z = goal.pose.z + align_height_;
+    const double height_error = target_z - current_pose_.z;
+    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+    status_msg_ = "DESCEND: odometry fallback → align height";
 
+    if (std::abs(height_error) <= z_tolerance_) {
+      command_.vz = 0.0;
+      transition(State::ALIGN);
+    }
+  }
+
+  command_ = worldToBody(command_);
+}
+
+/*
+ * ---------------------------------------------------------
+ * ALIGN
+ * ---------------------------------------------------------
+ */
+void GliderProcessing::handleAlign()
+{
+  if (current_goal_idx_ >= goals_.size()) {
+    transition(State::RETURN_HOME);
+    return;
+  }
+
+  Pose xy_target = activeTargetXY();
+  command_.vx = clamp(kp_xy_ * (xy_target.x - current_pose_.x), -max_xy_speed_, max_xy_speed_);
+  command_.vy = clamp(kp_xy_ * (xy_target.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
+
+  // hold height
+  if (height_sensor_valid_) {
+    const double height_error = height_above_poo_ - align_height_;
+    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+  } else {
+    command_.vz = 0.0;
+  }
+
+  status_msg_ = detected_poo_valid_
+    ? "ALIGN: fine-tuning over sonar centre"
+    : "ALIGN: hovering (waiting for sonar)";
+
+  // Once XY is good, go to final descent
+  if (xyClose(current_pose_, xy_target)) {
+    command_.vx = 0.0;
+    command_.vy = 0.0;
+    transition(State::FINAL_DESCEND);
+  }
+
+  command_ = worldToBody(command_);
+}
+
+/*
+ * ---------------------------------------------------------
+ * Final Descend
+ * ---------------------------------------------------------
+ */
+void GliderProcessing::handleFinalDescend()
+{
+  if (current_goal_idx_ >= goals_.size()) {
+    transition(State::RETURN_HOME);
+    return;
+  }
+
+  Pose xy_target = activeTargetXY();
+  command_.vx = clamp(kp_xy_ * (xy_target.x - current_pose_.x), -max_xy_speed_, max_xy_speed_);
+  command_.vy = clamp(kp_xy_ * (xy_target.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
+
+  if (height_sensor_valid_) {
+    const double height_error = height_above_poo_ - pickup_height_;
+    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+    status_msg_ = "DESCEND: sensor → align height";
+
+    if (std::abs(height_error) <= z_tolerance_) {
+      command_.vz = 0.0;
       transition(State::PICKUP);
     }
-
   } else {
-
-    /*
-     * TEMPORARY TEST FALLBACK.
-     *
-     * The current Parrot model does not provide a
-     * downward Range sensor.
-     *
-     * Therefore use the known poo Z coordinate and
-     * odometry for testing.
-     */
-    const double target_z =
-      goal.pose.z + pickup_height_;
-
-    const double height_error =
-      target_z - current_pose_.z;
-
-    command_.vz =
-      clamp(
-        kp_z_ * height_error,
-        -max_z_speed_,
-        max_z_speed_);
-
-    status_msg_ =
-      "DESCEND: odometry fallback (no height sensor)";
+    // odometry fallback (same idea as before)
+    const Goal & goal = goals_[current_goal_idx_];
+    const double target_z = goal.pose.z + align_height_;
+    const double height_error = target_z - current_pose_.z;
+    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+    status_msg_ = "DESCEND: odometry fallback → align height";
 
     if (std::abs(height_error) <= z_tolerance_) {
-
       command_.vz = 0.0;
-
       transition(State::PICKUP);
     }
   }
 
-
-  /*
-   * Convert the horizontal command from world coordinates
-   * into the Parrot body frame because cmd_vel uses:
-   *
-   * linear.x = forward/backward
-   * linear.y = left/right
-   */
-  command_ =
-    worldToBody(command_);
+  command_ = worldToBody(command_);
 }
 
 
@@ -610,6 +609,33 @@ VelocityCommand GliderProcessing::worldToBody(
     c * world_command.vy;
 
   return body_command;
+}
+
+Pose GliderProcessing::activeTargetXY() const
+{
+  Pose target;
+  if (detected_poo_valid_) {
+    target.x = detected_poo_pose_.x;
+    target.y = detected_poo_pose_.y;
+  } else if (current_goal_idx_ < goals_.size()) {
+    target.x = goals_[current_goal_idx_].pose.x;
+    target.y = goals_[current_goal_idx_].pose.y;
+  } else {
+    target.x = current_pose_.x;
+    target.y = current_pose_.y;
+  }
+  return target;
+}
+
+void GliderProcessing::setDetectedPooPose(const Pose & pose)
+{
+  detected_poo_pose_ = pose;
+  detected_poo_valid_ = true;
+}
+
+void GliderProcessing::clearDetectedPooPose()
+{
+  detected_poo_valid_ = false;
 }
 
 }  // namespace glider

@@ -36,6 +36,8 @@ enum class State
   TAKEOFF,
   GOTO_POO,
   DESCEND,
+  ALIGN,
+  FINAL_DESCEND,
   PICKUP,
   ASCEND,
   RETURN_HOME,
@@ -50,6 +52,7 @@ public:
     const Pose & home,
     double safe_height = 15.0,
     double pickup_height = 1.5,
+    double align_height = 4.0,
     double xy_tolerance = 0.4,
     double z_tolerance = 0.15);
 
@@ -66,6 +69,10 @@ public:
   void setHeightAbovePoo(double height);
   void clearHeightAbovePoo();
 
+  // Poo pose
+  void setDetectedPooPose(const Pose & pose);
+  void clearDetectedPooPose();
+
   // Called at fixed rate
   std::pair<VelocityCommand, std::string> tick();
 
@@ -78,6 +85,8 @@ private:
   void handleTakeoff();
   void handleGotoPoo();
   void handleDescend();
+  void handleAlign();
+  void handleFinalDescend();
   void handlePickup();
   void handleAscend();
   void handleReturnHome();
@@ -104,6 +113,7 @@ private:
 
   double safe_height_;
   double pickup_height_;
+  double align_height_;
   double dropoff_height_;
 
   double xy_tolerance_;
@@ -129,6 +139,13 @@ private:
   // Height sensor
   bool height_sensor_valid_{false};
   double height_above_poo_{0.0};
+
+
+  bool detected_poo_valid_{false};
+  Pose detected_poo_pose_;
+
+  // poo helper
+  Pose activeTargetXY() const;
 
   VelocityCommand command_;
   std::string status_msg_;
