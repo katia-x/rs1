@@ -15,6 +15,7 @@ endif()
 
 ## Find packages, remove those that are not needed
 find_package(ament_cmake REQUIRED)
+<<<<<<< Updated upstream
 find_package(rclcpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -44,6 +45,30 @@ ament_target_dependencies(controllerprocessing geometry_msgs nav_msgs)
 
 add_library(missionprocessing src/missionProcessing.cpp)
 ament_target_dependencies(missionprocessing geometry_msgs nav_msgs)
+=======
+find_package(ament_cmake_gtest REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+add_executable(mission_node
+  src/main.cpp
+  src/mission_node.cpp
+  src/mission_processing.cpp
+)
+ament_target_dependencies(mission_node geometry_msgs rclcpp sensor_msgs)
+
+ament_add_gtest(mission_processing_test
+  test/basic_tests.cpp
+  src/mission_processing.cpp
+)
+ament_target_dependencies(mission_processing_test geometry_msgs rclcpp sensor_msgs)
+target_include_directories(mission_processing_test PRIVATE src)
+
+install(TARGETS mission_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+>>>>>>> Stashed changes
 
 add_library(trackmap src/trackMap.cpp)
 ament_target_dependencies(trackmap geometry_msgs nav_msgs sensor_msgs)
