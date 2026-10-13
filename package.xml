@@ -1,5 +1,3 @@
-<<<<<<< Updated upstream
-=======
 <?xml version="1.0"?>
 <package format="3">
   <name>rs1</name>
@@ -33,4 +31,3 @@
     <build_type>ament_cmake</build_type>
   </export>
 </package>
->>>>>>> Stashed changes
