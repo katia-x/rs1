@@ -300,6 +300,48 @@ void GliderNode::controlLoop()
   const auto [command, status] =
     processing_->tick();
 
+  // call sonar service once when we enter ALIGN 
+  static glider::State last_state = glider::State::STANDBY;
+  const auto current_state = processing_->state();
+
+  if (current_state == glider::State::ALIGN && last_state != glider::State::ALIGN)
+  {
+    if (sonar_client_->service_is_ready())
+    {
+      auto request = std::make_shared<rs1::srv::GetCubeCentre::Request>();
+
+      sonar_client_->async_send_request(
+        request,
+        [this](rclcpp::Client<rs1::srv::GetCubeCentre>::SharedFuture future)
+        {
+          auto response = future.get();
+          if (response->success)
+          {
+            glider::Pose p;
+            p.x = response->centre.position.x;
+            p.y = response->centre.position.y;
+            p.z = response->centre.position.z;
+
+            processing_->setDetectedPooPose(p);
+
+            RCLCPP_INFO(this->get_logger(),
+              "Sonar centre received: (%.2f, %.2f, %.2f)",
+              p.x, p.y, p.z);
+          }
+          else
+          {
+            RCLCPP_WARN(this->get_logger(),
+              "Sonar service failed: %s", response->message.c_str());
+          }
+        });
+    }
+    else
+    {
+      RCLCPP_WARN(this->get_logger(), "Sonar service not ready yet");
+    }
+  }
+
+  last_state = current_state;
 
   // Convert processing command to ROS message
   geometry_msgs::msg::Twist cmd;

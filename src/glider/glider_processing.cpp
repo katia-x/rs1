@@ -351,7 +351,7 @@ void GliderProcessing::handleFinalDescend()
   if (height_sensor_valid_) {
     const double height_error = height_above_poo_ - pickup_height_;
     command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-    status_msg_ = "DESCEND: sensor → align height";
+    status_msg_ = "FINAL DESCEND: sensor → pickup height";
 
     if (std::abs(height_error) <= z_tolerance_) {
       command_.vz = 0.0;
@@ -360,10 +360,10 @@ void GliderProcessing::handleFinalDescend()
   } else {
     // odometry fallback (same idea as before)
     const Goal & goal = goals_[current_goal_idx_];
-    const double target_z = goal.pose.z + align_height_;
+    const double target_z = goal.pose.z + pickup_height_;
     const double height_error = target_z - current_pose_.z;
     command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-    status_msg_ = "DESCEND: odometry fallback → align height";
+    status_msg_ = "FINAL DESCEND: odometry fallback → pickup height";
 
     if (std::abs(height_error) <= z_tolerance_) {
       command_.vz = 0.0;

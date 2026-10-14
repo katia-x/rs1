@@ -31,6 +31,14 @@ def _is_true_expression(name):
 def _if_true(name):
     return IfCondition(PythonExpression(_is_true_expression(name)))
 
+def _if_all_true(*names):
+    pieces = []
+    for i, name in enumerate(names):
+        if i > 0:
+            pieces.append(' and ')
+        pieces.extend(_is_true_expression(name))
+    return IfCondition(PythonExpression(pieces))
+
 
 def add_robot(
     ld,
@@ -141,6 +149,37 @@ def add_robot(
         condition=robot_enabled,
     ))
 
+def add_rviz_instance(
+    ld,
+    *,
+    config_path,
+    use_sim_time,
+    robot_arg,
+    robot_namespace,
+    rviz_config,
+    start_delay,
+):
+    # Each RViz process is itself placed in the robot namespace so the Nav2 RViz
+    # panel resolves relative action/service names such as navigate_to_pose and
+    # lifecycle_manager_navigation to the correct robot.
+    ld.add_action(TimerAction(
+        period=start_delay,
+        actions=[Node(
+            package='rviz2',
+            executable='rviz2',
+            namespace=robot_namespace,
+            name='rviz2',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time}],
+            arguments=['-d', PathJoinSubstitution([config_path, rviz_config])],
+            remappings=[
+                ('/tf', '/' + robot_namespace + '/tf'),
+                ('/tf_static', '/' + robot_namespace + '/tf_static'),
+            ],
+        )],
+        condition=_if_all_true('rviz', robot_arg),
+    ))
+
 
 def generate_launch_description():
     ld = LaunchDescription()
@@ -152,6 +191,14 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument(
         'use_sim_time', default_value='true',
         description='Use simulation time'))
+
+    rviz_launch_arg = DeclareLaunchArgument(
+        'rviz',
+        default_value='False',
+        description='Flag to launch RViz',
+    )
+
+    ld.add_action(rviz_launch_arg)
 
     ld.add_action(DeclareLaunchArgument(
         'world', default_value='rs1_world',
@@ -257,5 +304,15 @@ def generate_launch_description():
             'control_rate': 20.0,
         }],
     ))
+
+    add_rviz_instance(
+        ld,
+        config_path=config_path,
+        use_sim_time=use_sim_time,
+        robot_arg='parrot',
+        robot_namespace='parrot1',
+        rviz_config='rs1_parrot1.rviz',
+        start_delay=13.0,
+    )
 
     return ld
