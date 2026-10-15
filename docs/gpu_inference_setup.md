@@ -104,6 +104,20 @@ documents WITH_CUDA, WITH_CUDNN and OPENCV_DNN_CUDA.
 
 In each **fresh terminal**:
 
+Compile with:
+```bash
+source ~/opencv_gpu_ws/activate_gpu.sh
+cd ~/opencv_gpu_ws
+
+colcon build \
+  --base-paths src ~/wombat-RS1_ws/rs1 \
+  --packages-select rs1 \
+  --symlink-install
+
+source activate_gpu.sh
+ros2 launch rs1 rs1_demo.launch.py rviz:=true
+```
+
 ```bash
 source ~/opencv_gpu_ws/activate_gpu.sh
 ros2 launch rs1 rs1_demo.launch.py parrot:=false rviz:=true device:=auto

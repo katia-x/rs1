@@ -8,7 +8,7 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_gtest REQUIRED)
-find_package(geometry_msgs REQUIRED)li
+find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
@@ -48,8 +48,8 @@ target_link_libraries(plant_detector ${OpenCV_LIBS})
 install(TARGETS plant_detector DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY machine_learning/models/ DESTINATION share/${PROJECT_NAME}/machine_learning/models
   FILES_MATCHING PATTERN "*.onnx")
+  
 install(DIRECTORY launch config worlds urdf_husky urdf_parrot
-install(DIRECTORY launch config worlds urdf_husky
   DESTINATION share/${PROJECT_NAME}
   PATTERN "__pycache__" EXCLUDE
   PATTERN "*.pyc" EXCLUDE

@@ -288,7 +288,7 @@ def generate_launch_description():
 
     world_launch_arg = DeclareLaunchArgument(
         'world',
-        default_value='rs1_world',
+        default_value='rs1_terrain',
         description='Which world to load',
     )
     ld.add_action(world_launch_arg)
@@ -341,7 +341,7 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     pkg_path,
                     'worlds',
-                    [LaunchConfiguration('world'), '.sdf'],
+                    [LaunchConfiguration('world'), '.config'],
                 ]),
                 ' -r',
                 PythonExpression(["' ' if "] + _is_true_expression('gui') + [" else ' -s'"]),
