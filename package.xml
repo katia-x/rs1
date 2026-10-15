@@ -6,6 +6,12 @@
   <maintainer email="chalmers.cameronj@gmail.com">Cameron</maintainer>
   <license>TODO: choose project license; subject assets retain their original licenses</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_gtest</buildtool_depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <exec_depend>ros_gz_interfaces</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>xacro</exec_depend>
