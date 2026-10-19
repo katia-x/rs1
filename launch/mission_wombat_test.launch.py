@@ -10,21 +10,23 @@ from launch_ros.substitutions import FindPackageShare
 
 REGION = (
     "{header: {frame_id: map}, poses: ["
-    "{position: {x: -2.0, y: -2.0, z: 0.0}, orientation: {w: 1.0}}, "
-    "{position: {x: 2.0, y: -2.0, z: 0.0}, orientation: {w: 1.0}}, "
-    "{position: {x: 2.0, y: 2.0, z: 0.0}, orientation: {w: 1.0}}, "
-    "{position: {x: -2.0, y: 2.0, z: 0.0}, orientation: {w: 1.0}}]}"
+    "{position: {x: -5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}}, "
+    "{position: {x: 5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}}, "
+    "{position: {x: 5.0, y: 5.0, z: 0.0}, orientation: {w: 1.0}}, "
+    "{position: {x: -5.0, y: 5.0, z: 0.0}, orientation: {w: 1.0}}]}"
 )
 
 
 def generate_launch_description():
     package_share = FindPackageShare('rs1')
     use_sim_time = LaunchConfiguration('use_sim_time')
+    world = LaunchConfiguration('world')
 
     simulation = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([
             package_share, 'launch', 'rs1_demo.launch.py'])),
         launch_arguments={
+            'world': world,
             'use_sim_time': use_sim_time,
             'slam': 'True',
             'nav2': 'True',
@@ -76,6 +78,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument('world', default_value='Environment_Flat'),
         DeclareLaunchArgument('use_sim_time', default_value='True'),
         simulation,
         mission_node,

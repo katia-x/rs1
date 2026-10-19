@@ -40,7 +40,7 @@ ament_target_dependencies(
 )
 rosidl_target_interfaces(wombat_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-install(DIRECTORY launch config worlds urdf_husky urdf_parrot
+install(DIRECTORY launch config worlds Environment_ML urdf_husky urdf_parrot
   DESTINATION share/${PROJECT_NAME}
   PATTERN "__pycache__" EXCLUDE
   PATTERN "*.pyc" EXCLUDE

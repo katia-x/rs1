@@ -10,8 +10,9 @@ MissionNode::MissionNode()
 {
 	global_frame_ = declare_parameter("global_frame", "map");
 	wombat_base_frame_ = declare_parameter("wombat_base_frame", "husky1_base_link");
-	camera_width_of_view_ = declare_parameter("camera_width_of_view", 1.0);
-	search_goal_distance_ = declare_parameter("search_goal_distance", 1.0);
+	camera_width_of_view_ = declare_parameter("camera_width_of_view", camera_width_of_view_);
+	search_goal_distance_ = declare_parameter("search_goal_distance", search_goal_distance_);
+	location_tolerance_ = declare_parameter("location_tolerance", location_tolerance_);
 
 	region_subscription_ = create_subscription<geometry_msgs::msg::PoseArray>("/region", rclcpp::QoS(10), std::bind(&MissionNode::region_callback, this, std::placeholders::_1));
 	weed_subscription_ = create_subscription<rs1::msg::PlantDetectionArray>("/plant_detection/weeds", rclcpp::QoS(10), std::bind(&MissionNode::weed_callback, this, std::placeholders::_1));
@@ -139,6 +140,16 @@ void MissionNode::serve_next_goal(
 		return;
 	}
 
+	// Move to the next lane before generating another goal once the current
+	// lane endpoint has been reached.
+	if (search_goal_index_ != 0 &&
+		distance(search_lines_[search_goal_index_].pose.position, robot_pose.pose.position) < location_tolerance_) {
+		search_goal_index_++;
+		if (search_goal_index_ >= search_lines_.size()) {
+			search_goal_index_ = 0;
+		}
+	}
+
 	// Before starting the search, drive all the way to the first point of the
 	// first lane. Weeds and lookahead are ignored during this initial approach.
 	if (search_goal_index_ == 0) {
@@ -180,20 +191,23 @@ void MissionNode::serve_next_goal(
 	if (!selected_weed_index.has_value()) {
 		response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
 		if (robot_pose.pose.position.y < search_lines_[search_goal_index_].pose.position.y) {
-			response->goal.pose.position.y = robot_pose.pose.position.y + search_goal_distance_;
+			response->goal.pose.position.y = std::min(
+				robot_pose.pose.position.y + lookahead,
+				search_lines_[search_goal_index_].pose.position.y);
 		} else {
-			response->goal.pose.position.y = robot_pose.pose.position.y - search_goal_distance_;
+			response->goal.pose.position.y = std::max(
+				robot_pose.pose.position.y - lookahead,
+				search_lines_[search_goal_index_].pose.position.y);
 		}
 	} else {
 		response->goal.pose.position = weeds_[selected_weed_index.value()].pose.position;
 	}
 
-	if (distance(search_lines_[search_goal_index_].pose.position, robot_pose.pose.position) < location_tolerance_) {
-		search_goal_index_++;
-		if (search_goal_index_ >= search_lines_.size()) {
-			search_goal_index_ = 0;
-		}
-	}
+	const double heading = std::atan2(
+		response->goal.pose.position.y - robot_pose.pose.position.y,
+		response->goal.pose.position.x - robot_pose.pose.position.x);
+	response->goal.pose.orientation.z = std::sin(heading * 0.5);
+	response->goal.pose.orientation.w = std::cos(heading * 0.5);
 	return;
 }
 

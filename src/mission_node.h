@@ -32,8 +32,8 @@ private:
 
 	std::string global_frame_;
 	std::string wombat_base_frame_;
-	double camera_width_of_view_;
-	double search_goal_distance_;
+	double camera_width_of_view_{2.5};
+	double search_goal_distance_{2.5};
 	bool search_line_assignment_alternation{false};
 	std::size_t search_goal_index_{0};
 	std::vector<geometry_msgs::msg::Pose> region_vertices_;

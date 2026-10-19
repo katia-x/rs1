@@ -30,6 +30,7 @@ private:
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
 	NavigateGoalHandle::SharedPtr active_goal_;
 	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
+	bool mission_request_in_flight_{false};
 };
 
 #endif

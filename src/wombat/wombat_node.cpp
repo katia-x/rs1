@@ -16,11 +16,16 @@ WombatNode::WombatNode() : Node("wombat_node"),
 // Ask Mission for the next search or weed goal.
 void WombatNode::request_next_goal()
 {
+	if (active_goal_ || mission_request_in_flight_) {
+		return;
+	}
+
 	if (!mission_client_->wait_for_service(1s)) {
 		RCLCPP_WARN(get_logger(), "Mission service is not available yet");
 		return;
 	}
 
+	mission_request_in_flight_ = true;
 	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
 	auto future = mission_client_->async_send_request(request, std::bind(&WombatNode::handle_mission_goal, this, std::placeholders::_1));
 	(void)future;
@@ -33,10 +38,12 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 	try {
 		response = future.get();
 	} catch (const std::exception & error) {
+		mission_request_in_flight_ = false;
 		RCLCPP_WARN(get_logger(), "Mission service call failed: %s", error.what());
 		request_next_goal();
 		return;
 	}
+	mission_request_in_flight_ = false;
 
 	if (!response->success) {
 		request_next_goal();

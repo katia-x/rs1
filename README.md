@@ -26,6 +26,10 @@ region publication:
 ros2 launch rs1 mission_wombat_test.launch.py
 ```
 
+The mission test uses the flat `Environment_Flat` world by default and
+publishes a 10 x 10 metre search region. Use `world:=rs1_world` or
+`world:=Environment_NoPlants` to select another environment.
+
 See [simulation setup](docs/simulation_setup.md) for dependencies, RViz,
 teleoperation, spawn settings and RGB-D topics. Mission scaffold code is not
 compiled or launched yet.
