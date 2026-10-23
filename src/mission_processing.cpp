@@ -18,7 +18,7 @@ void MissionProcessing::laser_scan_callback(sensor_msgs::msg::LaserScan::ConstSh
 	latest_laser_scan_ = std::move(scan);
 }
 
-// Converts bounding box coordinates to a velocity command. 
+// Converts bounding box coordinates to a velocity command.
 // The bounding box is defined by the minimum and maximum x and y coordinates temporarily.
 // Needs to be modified once the ML model is trained.
 geometry_msgs::msg::Twist MissionProcessing::pinpointPlant(
@@ -100,7 +100,7 @@ geometry_msgs::msg::Twist MissionProcessing::pinpointPlant(
     if (std::abs(robot_bearing) > alignment_tolerance) {
         cmd.angular.z = std::max(-max_turn_speed,
             std::min(max_turn_speed, turn_gain * robot_bearing));
-        return cmd; 
+        return cmd;
     }
 
     // WOMBAT facing plant -- Drive forward towards it
@@ -108,6 +108,6 @@ geometry_msgs::msg::Twist MissionProcessing::pinpointPlant(
         cmd.linear.x = std::min(max_drive_speed,
             drive_gain * (target_range - stop_distance));
     }
-	
+
     return cmd;
 }
