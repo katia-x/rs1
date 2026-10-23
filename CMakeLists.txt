@@ -11,13 +11,17 @@ find_package(ament_cmake_gtest REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(vision_msgs REQUIRED)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 add_executable(mission_node
   src/main.cpp
   src/mission_node.cpp
   src/mission_processing.cpp
 )
-ament_target_dependencies(mission_node geometry_msgs rclcpp sensor_msgs)
+ament_target_dependencies(mission_node geometry_msgs rclcpp sensor_msgs vision_msgs tf2 tf2_geometry_msgs tf2_ros)
 
 install(TARGETS mission_node
   DESTINATION lib/${PROJECT_NAME}
@@ -27,12 +31,11 @@ ament_add_gtest(mission_processing_test
   test/basic_tests.cpp
   src/mission_processing.cpp
 )
-ament_target_dependencies(mission_processing_test geometry_msgs rclcpp sensor_msgs)
+ament_target_dependencies(mission_processing_test geometry_msgs rclcpp sensor_msgs vision_msgs tf2 tf2_geometry_msgs tf2_ros)
 target_include_directories(mission_processing_test PRIVATE src)
 
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(vision_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
 

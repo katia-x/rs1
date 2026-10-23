@@ -2,8 +2,31 @@
 
 #include <cmath>
 #include <limits>
+#include <algorithm>
+#include <chrono>
+#include <functional>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+
+namespace
+{
+
+constexpr double kWeedConfidenceThreshold = 0.75;
+constexpr double kDuplicateDistance = 0.5;
+constexpr std::size_t kPointCloudHistorySize = 30;
+constexpr char kGlobalFrame[] = "map";
+
+double timestamp_difference(const builtin_interfaces::msg::Time & first,
+    const builtin_interfaces::msg::Time & second)
+{
+    return std::abs((rclcpp::Time(first) - rclcpp::Time(second)).seconds());
+}
+
+}
 
 MissionProcessing::MissionProcessing(rclcpp::Node & node)
+    : tf_buffer_(node.get_clock()),
+      tf_listener_(tf_buffer_)
 {
 	laser_scan_subscription_ = node.create_subscription<sensor_msgs::msg::LaserScan>(
 		"/husky1/scan",
@@ -11,11 +34,149 @@ MissionProcessing::MissionProcessing(rclcpp::Node & node)
 		[this](sensor_msgs::msg::LaserScan::ConstSharedPtr scan) {
 			laser_scan_callback(std::move(scan));
 		});
+
+    bounding_box_subscription_ = node.create_subscription<vision_msgs::msg::Detection2DArray>(
+		"/husky1/detections",
+		rclcpp::SensorDataQoS(),
+        [this](vision_msgs::msg::Detection2DArray::ConstSharedPtr detections) {
+            bounding_box_callback(std::move(detections));
+		});
+
+    point_cloud_subscription_ = node.create_subscription<sensor_msgs::msg::PointCloud2>(
+        "/husky1/camera/depth/points",
+        rclcpp::SensorDataQoS(),
+        [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr point_cloud) {
+            depth_point_cloud_callback(std::move(point_cloud));
+        });
+
+    weed_check_timer_ = node.create_wall_timer(
+        std::chrono::seconds(1),
+        std::bind(&MissionProcessing::check_for_weeds, this));
+}
+
+void MissionProcessing::depth_point_cloud_callback(
+    sensor_msgs::msg::PointCloud2::ConstSharedPtr point_cloud)
+{
+    point_cloud_history_.push_back(std::move(point_cloud));
+    if (point_cloud_history_.size() > kPointCloudHistorySize) {
+        point_cloud_history_.pop_front();
+    }
+}
+
+void MissionProcessing::check_for_weeds()
+{
+    if (!latest_bounding_boxes_ || point_cloud_history_.empty()) {
+        return;
+    }
+
+    const auto detection_stamp = latest_bounding_boxes_->header.stamp;
+    const auto point_cloud = *std::min_element(
+        point_cloud_history_.begin(), point_cloud_history_.end(),
+        [&detection_stamp](const auto & first, const auto & second) {
+            return timestamp_difference(first->header.stamp, detection_stamp) <
+                timestamp_difference(second->header.stamp, detection_stamp);
+        });
+
+    try {
+        const auto transform = tf_buffer_.lookupTransform(
+            kGlobalFrame,
+            point_cloud->header.frame_id,
+            rclcpp::Time(point_cloud->header.stamp));
+
+        for (const auto & detection : latest_bounding_boxes_->detections) {
+            for (const auto & result : detection.results) {
+                if (result.hypothesis.class_id != "Weed" ||
+                    result.hypothesis.score <= kWeedConfidenceThreshold) {
+                    continue;
+                }
+
+                if (point_cloud->width == 0 || point_cloud->height == 0) {
+                    return;
+                }
+                const auto & bounding_box = detection.bbox;
+
+                const auto min_x = std::clamp(
+                    std::lround(bounding_box.center.position.x - bounding_box.size_x / 2.0),
+                    0L, static_cast<long>(point_cloud->width - 1));
+                const auto max_x = std::clamp(
+                    std::lround(bounding_box.center.position.x + bounding_box.size_x / 2.0),
+                    0L, static_cast<long>(point_cloud->width - 1));
+                const auto min_y = std::clamp(
+                    std::lround(bounding_box.center.position.y - bounding_box.size_y / 2.0),
+                    0L, static_cast<long>(point_cloud->height - 1));
+                const auto max_y = std::clamp(
+                    std::lround(bounding_box.center.position.y + bounding_box.size_y / 2.0),
+                    0L, static_cast<long>(point_cloud->height - 1));
+
+                double sum_x = 0.0;
+                double sum_y = 0.0;
+                double sum_z = 0.0;
+                std::size_t valid_sample_count = 0;
+                for (int sample_y = 0; sample_y < 3; ++sample_y) {
+                    const auto pixel_y = static_cast<std::size_t>(
+                        min_y + (max_y - min_y) * sample_y / 2);
+                    for (int sample_x = 0; sample_x < 3; ++sample_x) {
+                        const auto pixel_x = static_cast<std::size_t>(
+                            min_x + (max_x - min_x) * sample_x / 2);
+                        const auto point_index = pixel_y * point_cloud->width + pixel_x;
+
+                        sensor_msgs::PointCloud2ConstIterator<float> x(*point_cloud, "x");
+                        sensor_msgs::PointCloud2ConstIterator<float> y(*point_cloud, "y");
+                        sensor_msgs::PointCloud2ConstIterator<float> z(*point_cloud, "z");
+                        x += point_index;
+                        y += point_index;
+                        z += point_index;
+                        if (!std::isfinite(*x) || !std::isfinite(*y) || !std::isfinite(*z)) {
+                            continue;
+                        }
+
+                        sum_x += *x;
+                        sum_y += *y;
+                        sum_z += *z;
+                        ++valid_sample_count;
+                    }
+                }
+                if (valid_sample_count == 0) {
+                    continue;
+                }
+
+                geometry_msgs::msg::PointStamped camera_point;
+                camera_point.header = point_cloud->header;
+                camera_point.point.x = sum_x / valid_sample_count;
+                camera_point.point.y = sum_y / valid_sample_count;
+                camera_point.point.z = sum_z / valid_sample_count;
+                geometry_msgs::msg::PointStamped global_point;
+                tf2::doTransform(camera_point, global_point, transform);
+
+                const auto duplicate = std::any_of(
+                    stored_weed_coordinates_.begin(), stored_weed_coordinates_.end(),
+                    [&global_point](const auto & stored_point) {
+                        const double dx = stored_point.x - global_point.point.x;
+                        const double dy = stored_point.y - global_point.point.y;
+                        const double dz = stored_point.z - global_point.point.z;
+                        return std::sqrt(dx * dx + dy * dy + dz * dz) < kDuplicateDistance;
+                    });
+                if (!duplicate) {
+                    stored_weed_coordinates_.push_back(global_point.point);
+                }
+            }
+        }
+    } catch (const tf2::TransformException &) {
+        return;
+    } catch (const std::runtime_error &) {
+        return;
+    }
 }
 
 void MissionProcessing::laser_scan_callback(sensor_msgs::msg::LaserScan::ConstSharedPtr scan)
 {
 	latest_laser_scan_ = std::move(scan);
+}
+
+void MissionProcessing::bounding_box_callback(
+    vision_msgs::msg::Detection2DArray::ConstSharedPtr detections)
+{
+    latest_bounding_boxes_ = std::move(detections);
 }
 
 // Converts bounding box coordinates to a velocity command. 
