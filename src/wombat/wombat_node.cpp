@@ -4,9 +4,9 @@
 
 using namespace std::chrono_literals;
 
-// Create the Mission service client and Nav2 action client.
-WombatNode::WombatNode() : Node("wombat_node"),
-	global_frame_(declare_parameter("global_frame", "map"))
+WombatNode::WombatNode()
+: Node("wombat_node"),
+  global_frame_(declare_parameter("global_frame", "map"))
 {
 	mission_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
@@ -15,7 +15,6 @@ WombatNode::WombatNode() : Node("wombat_node"),
 	request_next_goal();
 }
 
-// Ask Mission for the next search or weed goal.
 void WombatNode::request_next_goal(bool skip_current_goal)
 {
 	if (active_goal_ || mission_request_in_flight_) {
@@ -30,58 +29,58 @@ void WombatNode::request_next_goal(bool skip_current_goal)
 	mission_request_in_flight_ = true;
 	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
 	request->skip_current_goal = skip_current_goal;
-	auto future = mission_client_->async_send_request(request, std::bind(&WombatNode::handle_mission_goal, this, std::placeholders::_1));
-	(void)future;
+	mission_client_->async_send_request(
+		request, std::bind(&WombatNode::handle_mission_goal, this, std::placeholders::_1));
 }
 
-// Forward Mission's goal to Nav2, which handles path planning and control.
 void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future)
 {
-	std::shared_ptr<rs1::srv::WombatNextGoal::Response> response;
 	try {
-		response = future.get();
+		auto response = future.get();
+		mission_request_in_flight_ = false;
+
+		if (!response->success) {
+			request_next_goal();
+			return;
+		}
+
+		response->goal.header.frame_id = response->goal.header.frame_id.empty()
+			? global_frame_ : response->goal.header.frame_id;
+		response->goal.header.stamp = now();
+
+		const double repeated_goal_distance = std::hypot(
+			response->goal.pose.position.x - last_goal_.pose.position.x,
+			response->goal.pose.position.y - last_goal_.pose.position.y);
+		if (last_goal_valid_ && repeated_goal_distance < 0.1) {
+			RCLCPP_WARN(
+				get_logger(),
+				"Waypoint (%.2f, %.2f) repeated without progress; skipping it",
+				response->goal.pose.position.x, response->goal.pose.position.y);
+			request_next_goal(true);
+			return;
+		}
+
+		if (!navigation_client_->wait_for_action_server(2s)) {
+			RCLCPP_WARN(get_logger(), "Nav2 NavigateToPose action is not available yet");
+			return;
+		}
+
+		NavigateToPose::Goal goal;
+		goal.pose = response->goal;
+		last_goal_ = response->goal;
+		last_goal_valid_ = true;
+
+		rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
+		options.goal_response_callback = std::bind(
+			&WombatNode::handle_nav_goal_response, this, std::placeholders::_1);
+		options.result_callback = std::bind(
+			&WombatNode::handle_nav_result, this, std::placeholders::_1);
+		navigation_client_->async_send_goal(goal, options);
 	} catch (const std::exception & error) {
 		mission_request_in_flight_ = false;
 		RCLCPP_WARN(get_logger(), "Mission service call failed: %s", error.what());
 		request_next_goal();
-		return;
 	}
-	mission_request_in_flight_ = false;
-
-	if (!response->success) {
-		request_next_goal();
-		return;
-	}
-
-	response->goal.header.frame_id = response->goal.header.frame_id.empty() ? global_frame_ : response->goal.header.frame_id;
-	response->goal.header.stamp = now();
-
-	const double repeated_goal_distance = std::hypot(
-		response->goal.pose.position.x - last_goal_.pose.position.x,
-		response->goal.pose.position.y - last_goal_.pose.position.y);
-	if (last_goal_valid_ && repeated_goal_distance < 0.1) {
-		RCLCPP_WARN(
-			get_logger(),
-			"Waypoint (%.2f, %.2f) repeated without progress; blacklisting it and requesting the next waypoint",
-			response->goal.pose.position.x, response->goal.pose.position.y);
-		request_next_goal(true);
-		return;
-	}
-
-	if (!navigation_client_->wait_for_action_server(2s)) {
-		RCLCPP_WARN(get_logger(), "Nav2 NavigateToPose action is not available yet");
-		return;
-	}
-
-	NavigateToPose::Goal navigation_goal;
-	navigation_goal.pose = response->goal;
-	last_goal_ = response->goal;
-	last_goal_valid_ = true;
-	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
-	options.goal_response_callback = std::bind(
-		&WombatNode::handle_nav_goal_response, this, std::placeholders::_1);
-	options.result_callback = std::bind(&WombatNode::handle_nav_result, this, std::placeholders::_1);
-	(void)navigation_client_->async_send_goal(navigation_goal, options);
 }
 
 void WombatNode::handle_nav_goal_response(NavigateGoalHandle::SharedPtr goal_handle)
@@ -101,12 +100,11 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 	active_goal_.reset();
 	if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
 		RCLCPP_INFO(get_logger(), "Nav2 reached the goal");
-	} else {
-		RCLCPP_WARN(get_logger(), "Nav2 failed to reach the goal; skipping it and requesting another goal");
-		request_next_goal(true);
 		return;
 	}
-	request_next_goal();
+
+	RCLCPP_WARN(get_logger(), "Nav2 failed to reach the goal; skipping it");
+	request_next_goal(true);
 }
 
 int main(int argc, char ** argv)

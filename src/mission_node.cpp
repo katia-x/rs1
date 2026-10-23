@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
-#include <limits>
+#include <functional>
+#include <optional>
 
 // Configure mission parameters, subscriptions, the goal service, and TF.
 MissionNode::MissionNode()
@@ -13,10 +14,18 @@ MissionNode::MissionNode()
 	camera_width_of_view_ = declare_parameter("camera_width_of_view", camera_width_of_view_);
 	search_goal_distance_ = declare_parameter("search_goal_distance", search_goal_distance_);
 	location_tolerance_ = declare_parameter("location_tolerance", location_tolerance_);
+	const auto detections_topic = declare_parameter<std::string>(
+		"detections_topic", "/husky1/detections");
 
-	region_subscription_ = create_subscription<geometry_msgs::msg::PoseArray>("/region", rclcpp::QoS(10), std::bind(&MissionNode::region_callback, this, std::placeholders::_1));
-	weed_subscription_ = create_subscription<rs1::msg::PlantDetectionArray>("/plant_detection/weeds", rclcpp::QoS(10), std::bind(&MissionNode::weed_callback, this, std::placeholders::_1));
-	next_goal_service_ = create_service<rs1::srv::WombatNextGoal>("wombat_next_goal", std::bind(&MissionNode::serve_next_goal, this, std::placeholders::_1, std::placeholders::_2));
+	region_subscription_ = create_subscription<geometry_msgs::msg::PoseArray>(
+		"/region", rclcpp::QoS(10),
+		std::bind(&MissionNode::region_callback, this, std::placeholders::_1));
+	detection_subscription_ = create_subscription<vision_msgs::msg::Detection2DArray>(
+		detections_topic, rclcpp::SensorDataQoS(),
+		std::bind(&MissionNode::detection_callback, this, std::placeholders::_1));
+	next_goal_service_ = create_service<rs1::srv::WombatNextGoal>(
+		"wombat_next_goal",
+		std::bind(&MissionNode::serve_next_goal, this, std::placeholders::_1, std::placeholders::_2));
 
 	tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
 	tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
@@ -42,10 +51,11 @@ void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr
 	RCLCPP_INFO(get_logger(), "Region updated with %zu vertices", region_vertices_.size());
 }
 
-// Replace the stored weed detections with the latest perception snapshot.
-void MissionNode::weed_callback(const rs1::msg::PlantDetectionArray::SharedPtr message)
+// Store the latest image-space detections. They require depth and TF projection
+// before they can safely be converted into map-frame navigation goals.
+void MissionNode::detection_callback(const vision_msgs::msg::Detection2DArray::SharedPtr message)
 {
-	weeds_ = message->detections;
+	detections_ = message->detections;
 }
 
 // Look up Wombat's current pose in the global planning frame.
@@ -164,48 +174,16 @@ void MissionNode::serve_next_goal(
 		return;
 	}
 
-	const double lane_half_width = camera_width_of_view_ * 0.25;
 	const double lookahead = std::max(0.0, search_goal_distance_);
-
-	// Choose the closest weed ahead on this lane, provided it is inside half
-	// the distance between adjacent search lines and inside the lookahead.
-	double miny;
-	double maxy;
-	double minx = search_lines_[search_goal_index_].pose.position.x - lane_half_width;
-	double maxx = search_lines_[search_goal_index_].pose.position.x + lane_half_width;
+	response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
 	if (robot_pose.pose.position.y < search_lines_[search_goal_index_].pose.position.y) {
-		miny = robot_pose.pose.position.y;
-		maxy = robot_pose.pose.position.y + search_goal_distance_;
+		response->goal.pose.position.y = std::min(
+			robot_pose.pose.position.y + lookahead,
+			search_lines_[search_goal_index_].pose.position.y);
 	} else {
-		miny = robot_pose.pose.position.y - search_goal_distance_;
-		maxy = robot_pose.pose.position.y;
-	}
-
-	std::optional<std::size_t> selected_weed_index;
-	for (std::size_t i = 0; i < weeds_.size(); ++i) {
-		const auto & w = weeds_[i];
-		if (w.pose.position.x < maxx && w.pose.position.x > minx && w.pose.position.y < maxy && w.pose.position.y > miny) {
-			if (!selected_weed_index.has_value()) {
-				selected_weed_index = i;
-			} else if (std::abs(w.pose.position.y - robot_pose.pose.position.y) < std::abs(weeds_[selected_weed_index.value()].pose.position.y - robot_pose.pose.position.y)) {
-				selected_weed_index = i;
-			}
-		}
-	}
-
-	if (!selected_weed_index.has_value()) {
-		response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
-		if (robot_pose.pose.position.y < search_lines_[search_goal_index_].pose.position.y) {
-			response->goal.pose.position.y = std::min(
-				robot_pose.pose.position.y + lookahead,
-				search_lines_[search_goal_index_].pose.position.y);
-		} else {
-			response->goal.pose.position.y = std::max(
-				robot_pose.pose.position.y - lookahead,
-				search_lines_[search_goal_index_].pose.position.y);
-		}
-	} else {
-		response->goal.pose.position = weeds_[selected_weed_index.value()].pose.position;
+		response->goal.pose.position.y = std::max(
+			robot_pose.pose.position.y - lookahead,
+			search_lines_[search_goal_index_].pose.position.y);
 	}
 
 	const double heading = std::atan2(

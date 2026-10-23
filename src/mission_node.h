@@ -6,8 +6,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
+#include <vision_msgs/msg/detection2_d_array.hpp>
 
-#include "rs1/msg/plant_detection_array.hpp"
 #include "rs1/srv/wombat_next_goal.hpp"
 
 #include <cstddef>
@@ -22,7 +22,7 @@ public:
 
 private:
 	void region_callback(const geometry_msgs::msg::PoseArray::SharedPtr message);
-	void weed_callback(const rs1::msg::PlantDetectionArray::SharedPtr message);
+	void detection_callback(const vision_msgs::msg::Detection2DArray::SharedPtr message);
 	bool current_pose(geometry_msgs::msg::PoseStamped & pose);
 	void build_search_lines();
 	void serve_next_goal(
@@ -37,11 +37,11 @@ private:
 	bool search_line_assignment_alternation{false};
 	std::size_t search_goal_index_{0};
 	std::vector<geometry_msgs::msg::Pose> region_vertices_;
-	std::vector<rs1::msg::PlantDetection> weeds_;
+	std::vector<vision_msgs::msg::Detection2D> detections_;
 	std::vector<geometry_msgs::msg::PoseStamped> search_lines_;
 	double location_tolerance_{0.25};
 	rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr region_subscription_;
-	rclcpp::Subscription<rs1::msg::PlantDetectionArray>::SharedPtr weed_subscription_;
+	rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr detection_subscription_;
 	rclcpp::Service<rs1::srv::WombatNextGoal>::SharedPtr next_goal_service_;
 	std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 	std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
