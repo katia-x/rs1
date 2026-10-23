@@ -142,8 +142,7 @@ void MissionNode::serve_next_goal(
 
 	// Move to the next lane before generating another goal once the current
 	// lane endpoint has been reached.
-	if (search_goal_index_ != 0 &&
-		distance(search_lines_[search_goal_index_].pose.position, robot_pose.pose.position) < location_tolerance_) {
+	if (search_goal_index_ != 0 && distance(search_lines_[search_goal_index_].pose.position, robot_pose.pose.position) < location_tolerance_) {
 		search_goal_index_++;
 		if (search_goal_index_ >= search_lines_.size()) {
 			search_goal_index_ = 0;
