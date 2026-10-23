@@ -37,6 +37,7 @@ training/
 !/machine_learning/models/
 /machine_learning/models/*
 !/machine_learning/models/rtmdet_tiny_plants.onnx
+!/machine_learning/models/rtmdet_tiny_plants_v2.onnx
 
 # Large model checkpoints
 *.pth
