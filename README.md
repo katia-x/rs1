@@ -31,6 +31,7 @@ To run the GUI, in another window run
 ```bash
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml   port:=8765   use_sim_time:=true
 ```
+Then in the Foxglove web GUI "https://app.foxglove.dev/uni-1511e5f5/p/prj_0edhFva64NKjaY73/view" run the "ws://localhost:8765" then edit the layout (top right option) and choose import. Select the most recent layout#.json from the docs folder.
 
 See [simulation setup](docs/simulation_setup.md) for dependencies, RViz,
 teleoperation, spawn settings and RGB-D topics. Mission scaffold code is not
