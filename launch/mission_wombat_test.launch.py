@@ -27,6 +27,7 @@ def generate_launch_description():
             package_share, 'launch', 'rs1_demo.launch.py'])),
         launch_arguments={
             'world': world,
+            'world_file': 'rs1_terrain.config',
             'use_sim_time': use_sim_time,
             'slam': 'True',
             'nav2': 'True',
@@ -35,7 +36,7 @@ def generate_launch_description():
             'gui': 'True',
             'husky_x': '4.0',
             'husky_y': '4.0',
-            'husky_z': '1.0',
+            'husky_z': '0.14',
             'husky_yaw': '0.0',
         }.items(),
     )
@@ -69,16 +70,16 @@ def generate_launch_description():
     )
 
     region_publisher = TimerAction(
-        period=15.0,
+        period=30.0,
         actions=[ExecuteProcess(
-            cmd=['ros2', 'topic', 'pub', '--once', '/region',
+            cmd=['ros2', 'topic', 'pub', '--rate', '1', '--times', '5', '/region',
                  'geometry_msgs/msg/PoseArray', REGION],
             output='screen',
         )],
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument('world', default_value='Environment_Flat'),
+        DeclareLaunchArgument('world', default_value='rs1_terrain'),
         DeclareLaunchArgument('use_sim_time', default_value='True'),
         simulation,
         mission_node,

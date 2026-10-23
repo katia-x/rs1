@@ -9,12 +9,12 @@ WombatNode::WombatNode() : Node("wombat_node"),
 	mission_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
-	mission_retry_timer_ = create_wall_timer(1s, std::bind(&WombatNode::request_next_goal, this));
+	mission_retry_timer_ = create_wall_timer(1s, [this]() { request_next_goal(); });
 	request_next_goal();
 }
 
 // Ask Mission for the next search or weed goal.
-void WombatNode::request_next_goal()
+void WombatNode::request_next_goal(bool skip_current_goal)
 {
 	if (active_goal_ || mission_request_in_flight_) {
 		return;
@@ -27,6 +27,7 @@ void WombatNode::request_next_goal()
 
 	mission_request_in_flight_ = true;
 	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
+	request->skip_current_goal = skip_current_goal;
 	auto future = mission_client_->async_send_request(request, std::bind(&WombatNode::handle_mission_goal, this, std::placeholders::_1));
 	(void)future;
 }
@@ -70,8 +71,8 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 void WombatNode::handle_nav_goal_response(NavigateGoalHandle::SharedPtr goal_handle)
 {
 	if (!goal_handle) {
-		RCLCPP_ERROR(get_logger(), "Nav2 rejected the goal");
-		request_next_goal();
+		RCLCPP_ERROR(get_logger(), "Nav2 rejected the goal; skipping it");
+		request_next_goal(true);
 		return;
 	}
 
@@ -85,7 +86,9 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 	if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
 		RCLCPP_INFO(get_logger(), "Nav2 reached the goal");
 	} else {
-		RCLCPP_WARN(get_logger(), "Nav2 failed to reach the goal; requesting another goal");
+		RCLCPP_WARN(get_logger(), "Nav2 failed to reach the goal; skipping it and requesting another goal");
+		request_next_goal(true);
+		return;
 	}
 	request_next_goal();
 }

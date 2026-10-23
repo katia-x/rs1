@@ -121,8 +121,6 @@ void MissionNode::serve_next_goal(
 	const std::shared_ptr<rs1::srv::WombatNextGoal::Request> request,
 	std::shared_ptr<rs1::srv::WombatNextGoal::Response> response)
 {
-	(void)request;
-
 	response->is_weed = false;
 	response->success = true;
 	response->goal.header.frame_id = global_frame_;
@@ -138,6 +136,14 @@ void MissionNode::serve_next_goal(
 	if (search_lines_.empty()) {
 		response->success = false;
 		return;
+	}
+
+	if (request->skip_current_goal && search_goal_index_ != 0) {
+		search_goal_index_++;
+		if (search_goal_index_ >= search_lines_.size()) {
+			search_goal_index_ = 0;
+		}
+		RCLCPP_WARN(get_logger(), "Skipping failed search goal and advancing to the next search segment");
 	}
 
 	// Move to the next lane before generating another goal once the current
