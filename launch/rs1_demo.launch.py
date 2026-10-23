@@ -3,6 +3,7 @@
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
+    ExecuteProcess,
     GroupAction,
     IncludeLaunchDescription,
     SetEnvironmentVariable,
@@ -17,6 +18,14 @@ from launch_ros.substitutions import FindPackageShare
 
 
 _TRUE_STRINGS = "['true', '1', 'yes', 'on']"
+
+MISSION_REGION = (
+    "{header: {frame_id: map}, poses: ["
+    "{position: {x: -5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}}, "
+    "{position: {x: 5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}}, "
+    "{position: {x: 5.0, y: 5.0, z: 0.0}, orientation: {w: 1.0}}, "
+    "{position: {x: -5.0, y: 5.0, z: 0.0}, orientation: {w: 1.0}}]}"
+)
 
 
 def _is_true_expression(name):
@@ -41,6 +50,7 @@ def add_robot(
     *,
     pkg_path,
     config_path,
+    world,
     use_sim_time,
     enabled_arg,
     namespace,
@@ -121,6 +131,7 @@ def add_robot(
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}],
         arguments=[
+            '-world', world,
             '-topic', '/' + namespace + '/robot_description',
             '-name', gz_model_name,
             '-x', x,
@@ -260,17 +271,21 @@ def generate_launch_description():
 
     slam_launch_arg = DeclareLaunchArgument(
         'slam',
-        default_value='False',
+        default_value='True',
         description='Flag to launch SLAM Toolbox for each enabled robot',
     )
     ld.add_action(slam_launch_arg)
 
     nav2_launch_arg = DeclareLaunchArgument(
         'nav2',
-        default_value='False',
+        default_value='True',
         description='Flag to launch Nav2 for each enabled robot. Nav2 also starts SLAM.',
     )
     ld.add_action(nav2_launch_arg)
+
+    ld.add_action(DeclareLaunchArgument(
+        'mission_region_delay', default_value='30.0',
+        description='Seconds before publishing the mission search region'))
 
     husky_launch_arg = DeclareLaunchArgument(
         'husky',
@@ -292,6 +307,13 @@ def generate_launch_description():
         description='Which world to load',
     )
     ld.add_action(world_launch_arg)
+
+    world_file_launch_arg = DeclareLaunchArgument(
+        'world_file',
+        default_value='',
+        description='World filename under worlds/, including its extension',
+    )
+    ld.add_action(world_file_launch_arg)
 
     ld.add_action(DeclareLaunchArgument(
         'gui', default_value='True', description='Open the Gazebo GUI'))
@@ -328,6 +350,16 @@ def generate_launch_description():
     ))
 
     # Start Gazebo once.
+    world_file = LaunchConfiguration('world_file')
+    world_path = PathJoinSubstitution([
+        pkg_path,
+        'worlds',
+        PythonExpression([
+            "'", world_file, "' if '", world_file, "' else (",
+            "'rs1_terrain.config' if '", LaunchConfiguration('world'),
+            "' == 'rs1_terrain' else '", LaunchConfiguration('world'), ".sdf')",
+        ]),
+    ])
     ld.add_action(IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -338,11 +370,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             'ign_args': [
-                PathJoinSubstitution([
-                    pkg_path,
-                    'worlds',
-                    [LaunchConfiguration('world'), '.config'],
-                ]),
+                world_path,
                 ' -r',
                 PythonExpression(["' ' if "] + _is_true_expression('gui') + [" else ' -s'"]),
                 PythonExpression(["' --headless-rendering' if "] +
@@ -368,6 +396,7 @@ def generate_launch_description():
         ld,
         pkg_path=pkg_path,
         config_path=config_path,
+        world=LaunchConfiguration('world'),
         use_sim_time=use_sim_time,
         enabled_arg='husky',
         namespace='husky1',
@@ -387,6 +416,7 @@ def generate_launch_description():
         ld,
         pkg_path=pkg_path,
         config_path=config_path,
+        world=LaunchConfiguration('world'),
         use_sim_time=use_sim_time,
         enabled_arg='parrot',
         namespace='parrot1',
@@ -454,6 +484,44 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
         }],
         condition=_if_all_true('perception', 'husky'),
+    ))
+
+    ld.add_action(Node(
+        package='rs1', executable='mission_node', name='mission_node',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'global_frame': 'map',
+            'wombat_base_frame': 'husky1_base_link',
+        }],
+        remappings=[
+            ('/tf', '/husky1/tf'),
+            ('/tf_static', '/husky1/tf_static'),
+        ],
+        condition=_if_true('husky'),
+    ))
+
+    ld.add_action(Node(
+        package='rs1', executable='wombat_node', name='wombat_node',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'global_frame': 'map',
+            'navigation_action': '/husky1/navigate_to_pose',
+        }],
+        condition=_if_true('husky'),
+    ))
+
+    ld.add_action(TimerAction(
+        period=LaunchConfiguration('mission_region_delay'),
+        actions=[ExecuteProcess(
+            cmd=[
+                'ros2', 'topic', 'pub', '--rate', '1', '--times', '5',
+                '/region', 'geometry_msgs/msg/PoseArray', MISSION_REGION,
+            ],
+            output='screen',
+        )],
+        condition=_if_true('husky'),
     ))
 
     return ld
