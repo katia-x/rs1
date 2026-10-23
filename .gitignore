@@ -30,11 +30,18 @@ Thumbs.db
 # ML outputs / temporary files
 outputs/
 work_dirs/
+training/
+
+# Ignore ML artifacts except the deployed model
+/machine_learning/*
+!/machine_learning/models/
+/machine_learning/models/*
+!/machine_learning/models/rtmdet_tiny_plants.onnx
+!/machine_learning/models/rtmdet_tiny_plants_v2.onnx
 
 # Large model checkpoints
 *.pth
 *.pt
-*.onnx
 
 # Temporary files
 *.tmp

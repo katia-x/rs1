@@ -4,6 +4,14 @@ Robot for identification and removal of invasive plant species from struggling A
 ## Overview
 ROS 2 husky robot which navigates through a Gazebo simulation environment of bushland, identifying and removing invasive and harmful weed species to assist with environmental regeneration.
 
+## Package setup
+You will need to install Foxglove to use GUI
+
+```bash
+sudo apt update
+sudo apt install ros-humble-foxglove-bridge
+```
+
 ## Navigation
 Using the Nav2 framework -Which needs to be installed into the ROS2 workspace-.
 
@@ -30,6 +38,12 @@ The mission test uses the flat `Environment_Flat` world by default and
 publishes a 10 x 10 metre search region. Use `world:=rs1_world` or
 `world:=Environment_NoPlants` to select another environment.
 
+To run the GUI, in another window run
+```bash
+ros2 launch foxglove_bridge foxglove_bridge_launch.xml   port:=8765   use_sim_time:=true
+```
+Then in the Foxglove web GUI "https://app.foxglove.dev/uni-1511e5f5/p/prj_0edhFva64NKjaY73/view" run the "ws://localhost:8765" then edit the layout (top right option) and choose import. Select the most recent layout#.json from the docs folder.
+
 See [simulation setup](docs/simulation_setup.md) for dependencies, RViz,
 teleoperation, spawn settings and RGB-D topics. Mission scaffold code is not
 compiled or launched yet.
@@ -37,7 +51,11 @@ compiled or launched yet.
 ## Plant Detection
 The pipeline receives images from the Husky camera, converts them to OpenCV format, and runs RTMDet Tiny object detection.
 
-### Plant Detection Installation:
-Assuming you have a ROS workspace set up for this project and have cloned this RS1 repo, follow these instructions to setup the plant detection pipeline on your machine.
+The demo now includes the C++ ONNX detector and an annotated-image RViz display.
+See [OpenCV perception setup](docs/opencv_perception.md) for building and auto/CPU/CUDA modes.
 
-See the [Plant Detection documentation](src/plant_perception/PLANT_DETECTION_README.md).
+For NVIDIA GPU inference, follow the [GPU dependency setup guide](docs/gpu_inference_setup.md).
+The verified GPU overlay supports cpu, cuda and auto modes without the training venv.
+
+To extract ROS bag frames, remove duplicates and split images for annotation,
+see [dataset preparation](docs/dataset_preparation.md).

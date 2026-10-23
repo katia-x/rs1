@@ -7,6 +7,7 @@
   <license>TODO: choose project license; subject assets retain their original licenses</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
+  <buildtool_depend>ament_cmake_gtest</buildtool_depend>
   <build_depend>geometry_msgs</build_depend>
   <build_depend>nav2_msgs</build_depend>
   <build_depend>rclcpp</build_depend>
@@ -15,6 +16,10 @@
   <build_depend>tf2</build_depend>
   <build_depend>tf2_geometry_msgs</build_depend>
   <build_depend>tf2_ros</build_depend>
+  <depend>sensor_msgs</depend>
+  <depend>vision_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>libopencv-dev</depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav2_msgs</exec_depend>
   <exec_depend>rclcpp</exec_depend>
@@ -25,6 +30,8 @@
   <exec_depend>tf2_geometry_msgs</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <member_of_group>rosidl_interface_packages</member_of_group>
+  <exec_depend>ros_gz_interfaces</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>xacro</exec_depend>
@@ -32,8 +39,6 @@
   <exec_depend>robot_localization</exec_depend>
   <exec_depend>ros_ign_gazebo</exec_depend>
   <exec_depend>ros_ign_bridge</exec_depend>
-  <exec_depend>sensor_msgs</exec_depend>
-  <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav_msgs</exec_depend>
   <exec_depend>rosgraph_msgs</exec_depend>
   <exec_depend>rviz2</exec_depend>
