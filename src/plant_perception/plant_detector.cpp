@@ -172,7 +172,9 @@ void PlantDetector::draw_detection(
         cvRound(box.x + box.width), cvRound(box.y + box.height));
     const cv::Point label_position(
         std::max(0, top_left.x), std::max(20, top_left.y - 10));
-    const cv::Scalar colour(0, 255, 0);
+    const cv::Scalar colour = (class_name == "Weed")
+        ? cv::Scalar(0,0,255)
+        : cv::Scalar(0,255,0);
 
     cv::rectangle(image, top_left, bottom_right, colour, 2);
     cv::putText(

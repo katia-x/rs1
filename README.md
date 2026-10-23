@@ -31,3 +31,6 @@ See [OpenCV perception setup](docs/opencv_perception.md) for building and auto/C
 
 For NVIDIA GPU inference, follow the [GPU dependency setup guide](docs/gpu_inference_setup.md).
 The verified GPU overlay supports cpu, cuda and auto modes without the training venv.
+
+To extract ROS bag frames, remove duplicates and split images for annotation,
+see [dataset preparation](docs/dataset_preparation.md).

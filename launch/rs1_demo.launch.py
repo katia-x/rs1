@@ -234,7 +234,7 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument('device', default_value='auto',
         choices=['auto', 'cpu', 'cuda'], description='OpenCV inference backend'))
     ld.add_action(DeclareLaunchArgument('model_path', default_value=PathJoinSubstitution([
-        pkg_path, 'machine_learning', 'models', 'rtmdet_tiny_plants.onnx'])))
+        pkg_path, 'machine_learning', 'models', 'rtmdet_tiny_plants_v2.onnx'])))
     ld.add_action(DeclareLaunchArgument('camera_topic', default_value='/husky1/camera/image'))
     ld.add_action(DeclareLaunchArgument('camera_reliability', default_value='reliable',
         choices=['best_effort', 'reliable']))
