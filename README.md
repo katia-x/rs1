@@ -39,7 +39,8 @@ compiled or launched yet.
 ## Plant Detection
 The pipeline receives images from the Husky camera, converts them to OpenCV format, and runs RTMDet Tiny object detection.
 
-### Plant Detection Installation:
-Assuming you have a ROS workspace set up for this project and have cloned this RS1 repo, follow these instructions to setup the plant detection pipeline on your machine.
+The demo now includes the C++ ONNX detector and an annotated-image RViz display.
+See [OpenCV perception setup](docs/opencv_perception.md) for building and auto/CPU/CUDA modes.
 
-See the [Plant Detection documentation](src/plant_perception/PLANT_DETECTION_README.md).
+For NVIDIA GPU inference, follow the [GPU dependency setup guide](docs/gpu_inference_setup.md).
+The verified GPU overlay supports cpu, cuda and auto modes without the training venv.
