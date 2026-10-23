@@ -27,17 +27,6 @@ source install/setup.bash
 ros2 launch rs1 rs1_demo.launch.py
 ```
 
-For an end-to-end Mission and Wombat test with SLAM, Nav2 and one map-frame
-region publication:
-
-```bash
-ros2 launch rs1 mission_wombat_test.launch.py
-```
-
-The mission test uses the flat `Environment_Flat` world by default and
-publishes a 10 x 10 metre search region. Use `world:=rs1_world` or
-`world:=Environment_NoPlants` to select another environment.
-
 To run the GUI, in another window run
 ```bash
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml   port:=8765   use_sim_time:=true

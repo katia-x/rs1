@@ -41,7 +41,6 @@ def add_robot(
     *,
     pkg_path,
     config_path,
-    world,
     use_sim_time,
     enabled_arg,
     namespace,
@@ -122,7 +121,6 @@ def add_robot(
         output='screen',
         parameters=[{'use_sim_time': use_sim_time}],
         arguments=[
-            '-world', world,
             '-topic', '/' + namespace + '/robot_description',
             '-name', gz_model_name,
             '-x', x,
@@ -295,13 +293,6 @@ def generate_launch_description():
     )
     ld.add_action(world_launch_arg)
 
-    world_file_launch_arg = DeclareLaunchArgument(
-        'world_file',
-        default_value='',
-        description='World filename under worlds/, including its extension',
-    )
-    ld.add_action(world_file_launch_arg)
-
     ld.add_action(DeclareLaunchArgument(
         'gui', default_value='True', description='Open the Gazebo GUI'))
     ld.add_action(DeclareLaunchArgument(
@@ -337,15 +328,6 @@ def generate_launch_description():
     ))
 
     # Start Gazebo once.
-    world_file = LaunchConfiguration('world_file')
-    world_path = PathJoinSubstitution([
-        pkg_path,
-        'worlds',
-        PythonExpression([
-            "'", world_file, "' if '", world_file, "' else '",
-            LaunchConfiguration('world'), ".sdf'",
-        ]),
-    ])
     ld.add_action(IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             PathJoinSubstitution([
@@ -356,7 +338,11 @@ def generate_launch_description():
         ),
         launch_arguments={
             'ign_args': [
-                world_path,
+                PathJoinSubstitution([
+                    pkg_path,
+                    'worlds',
+                    [LaunchConfiguration('world'), '.config'],
+                ]),
                 ' -r',
                 PythonExpression(["' ' if "] + _is_true_expression('gui') + [" else ' -s'"]),
                 PythonExpression(["' --headless-rendering' if "] +
@@ -382,7 +368,6 @@ def generate_launch_description():
         ld,
         pkg_path=pkg_path,
         config_path=config_path,
-        world=LaunchConfiguration('world'),
         use_sim_time=use_sim_time,
         enabled_arg='husky',
         namespace='husky1',
@@ -402,7 +387,6 @@ def generate_launch_description():
         ld,
         pkg_path=pkg_path,
         config_path=config_path,
-        world=LaunchConfiguration('world'),
         use_sim_time=use_sim_time,
         enabled_arg='parrot',
         namespace='parrot1',

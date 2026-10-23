@@ -46,6 +46,3 @@ training/
 # Temporary files
 *.tmp
 *.log
-
-# User-specific files
-setup.sh
