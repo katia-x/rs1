@@ -1,5 +1,7 @@
 #include "wombat_node.h"
 
+#include <cmath>
+
 using namespace std::chrono_literals;
 
 // Create the Mission service client and Nav2 action client.
@@ -54,6 +56,18 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 	response->goal.header.frame_id = response->goal.header.frame_id.empty() ? global_frame_ : response->goal.header.frame_id;
 	response->goal.header.stamp = now();
 
+	const double repeated_goal_distance = std::hypot(
+		response->goal.pose.position.x - last_goal_.pose.position.x,
+		response->goal.pose.position.y - last_goal_.pose.position.y);
+	if (last_goal_valid_ && repeated_goal_distance < 0.1) {
+		RCLCPP_WARN(
+			get_logger(),
+			"Waypoint (%.2f, %.2f) repeated without progress; blacklisting it and requesting the next waypoint",
+			response->goal.pose.position.x, response->goal.pose.position.y);
+		request_next_goal(true);
+		return;
+	}
+
 	if (!navigation_client_->wait_for_action_server(2s)) {
 		RCLCPP_WARN(get_logger(), "Nav2 NavigateToPose action is not available yet");
 		return;
@@ -61,6 +75,8 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 
 	NavigateToPose::Goal navigation_goal;
 	navigation_goal.pose = response->goal;
+	last_goal_ = response->goal;
+	last_goal_valid_ = true;
 	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
 	options.goal_response_callback = std::bind(
 		&WombatNode::handle_nav_goal_response, this, std::placeholders::_1);

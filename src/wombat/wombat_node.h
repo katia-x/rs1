@@ -2,6 +2,7 @@
 #define RS1_WOMBAT_NODE_H_
 
 #include <nav2_msgs/action/navigate_to_pose.hpp>
+#include <geometry_msgs/msg/pose_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 
@@ -29,6 +30,8 @@ private:
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedPtr mission_client_;
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
 	NavigateGoalHandle::SharedPtr active_goal_;
+	geometry_msgs::msg::PoseStamped last_goal_;
+	bool last_goal_valid_{false};
 	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
 	bool mission_request_in_flight_{false};
 };
