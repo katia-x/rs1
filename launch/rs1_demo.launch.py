@@ -228,6 +228,21 @@ def generate_launch_description():
     pkg_path = FindPackageShare('rs1')
     config_path = PathJoinSubstitution([pkg_path, 'config'])
 
+    # C++ OpenCV inference; no training environment required at runtime.
+    ld.add_action(DeclareLaunchArgument('perception', default_value='True',
+        description='Run the C++ plant detector for Husky'))
+    ld.add_action(DeclareLaunchArgument('device', default_value='auto',
+        choices=['auto', 'cpu', 'cuda'], description='OpenCV inference backend'))
+    ld.add_action(DeclareLaunchArgument('model_path', default_value=PathJoinSubstitution([
+        pkg_path, 'machine_learning', 'models', 'rtmdet_tiny_plants_v2.onnx'])))
+    ld.add_action(DeclareLaunchArgument('camera_topic', default_value='/husky1/camera/image'))
+    ld.add_action(DeclareLaunchArgument('camera_reliability', default_value='reliable',
+        choices=['best_effort', 'reliable']))
+    ld.add_action(DeclareLaunchArgument('confidence_threshold', default_value='0.3'))
+    ld.add_action(DeclareLaunchArgument('nms_threshold', default_value='0.65'))
+    ld.add_action(DeclareLaunchArgument('inference_rate_hz', default_value='2.0'))
+
+
     use_sim_time_launch_arg = DeclareLaunchArgument(
         'use_sim_time',
         default_value='True',
@@ -273,7 +288,7 @@ def generate_launch_description():
 
     world_launch_arg = DeclareLaunchArgument(
         'world',
-        default_value='rs1_world',
+        default_value='rs1_terrain',
         description='Which world to load',
     )
     ld.add_action(world_launch_arg)
@@ -283,7 +298,7 @@ def generate_launch_description():
     ld.add_action(DeclareLaunchArgument(
         'headless_rendering', default_value='False',
         description='Use EGL for camera rendering without a display'))
-    for robot, defaults in [('husky', ('0.0', '0.0', '1.0', '0.0')),
+    for robot, defaults in [('husky', ('-0.5', '0.0', '0.5', '0.0')),
                             ('parrot', ('2.0', '0.0', '1.5', '0.0'))]:
         for axis, value in zip(('x', 'y', 'z', 'yaw'), defaults):
             ld.add_action(DeclareLaunchArgument(
@@ -326,7 +341,7 @@ def generate_launch_description():
                 PathJoinSubstitution([
                     pkg_path,
                     'worlds',
-                    [LaunchConfiguration('world'), '.sdf'],
+                    [LaunchConfiguration('world'), '.config'],
                 ]),
                 ' -r',
                 PythonExpression(["' ' if "] + _is_true_expression('gui') + [" else ' -s'"]),
@@ -424,5 +439,21 @@ def generate_launch_description():
         rviz_config='rs1_parrot1.rviz',
         start_delay=13.0,
     )
+
+    ld.add_action(Node(
+        package='rs1', executable='plant_detector', name='plant_detector',
+        namespace='husky1', output='screen',
+        parameters=[{
+            'model_path': LaunchConfiguration('model_path'),
+            'device': LaunchConfiguration('device'),
+            'camera_topic': LaunchConfiguration('camera_topic'),
+            'camera_reliability': LaunchConfiguration('camera_reliability'),
+            'confidence_threshold': ParameterValue(LaunchConfiguration('confidence_threshold'), value_type=float),
+            'nms_threshold': ParameterValue(LaunchConfiguration('nms_threshold'), value_type=float),
+            'inference_rate_hz': ParameterValue(LaunchConfiguration('inference_rate_hz'), value_type=float),
+            'use_sim_time': use_sim_time,
+        }],
+        condition=_if_all_true('perception', 'husky'),
+    ))
 
     return ld

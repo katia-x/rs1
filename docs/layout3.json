@@ -1,0 +1,423 @@
+{
+  "configById": {
+    "3D!1umvbdc": {
+      "cameraState": {
+        "perspective": true,
+        "distance": 8.802533373024232,
+        "phi": 75.44481382979974,
+        "thetaOffset": -15.731050531918164,
+        "targetOffset": [
+          1.9589015164281591,
+          1.7941475615260427,
+          0.6774414062347133
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {
+        "frame:husky1_odom": {
+          "visible": false
+        },
+        "frame:husky1_base_link": {
+          "visible": true
+        },
+        "frame:husky1_base_scan": {
+          "visible": false
+        },
+        "frame:husky1_camera_link": {
+          "visible": false
+        },
+        "frame:husky1_camera_depth_frame": {
+          "visible": false
+        },
+        "frame:husky1_camera_depth_optical_frame": {
+          "visible": false
+        },
+        "frame:husky1_camera_optical_frame": {
+          "visible": false
+        },
+        "frame:husky1_camera_rgb_frame": {
+          "visible": false
+        },
+        "frame:husky1_camera_rgb_optical_frame": {
+          "visible": false
+        },
+        "frame:husky1_front_left_wheel_link": {
+          "visible": false
+        },
+        "frame:husky1_imu_link": {
+          "visible": false
+        },
+        "frame:husky1_rear_left_wheel_link": {
+          "visible": false
+        },
+        "frame:husky1_rear_right_wheel_link": {
+          "visible": false
+        },
+        "frame:parrot1_odom": {
+          "visible": false
+        },
+        "frame:husky1_front_right_wheel_link": {
+          "visible": false
+        },
+        "frame:parrot1_base_scan": {
+          "visible": false
+        },
+        "frame:parrot1_base_link": {
+          "visible": true
+        },
+        "frame:parrot1_camera_link": {
+          "visible": false
+        },
+        "frame:parrot1_camera_depth_frame": {
+          "visible": false
+        },
+        "frame:parrot1_camera_depth_optical_frame": {
+          "visible": false
+        },
+        "frame:parrot1_camera_optical_frame": {
+          "visible": false
+        },
+        "frame:parrot1_camera_rgb_frame": {
+          "visible": false
+        },
+        "frame:parrot1_camera_rgb_optical_frame": {
+          "visible": false
+        },
+        "frame:parrot1_imu_link": {
+          "visible": false
+        }
+      },
+      "topics": {
+        "/husky1/camera/camera_info": {
+          "visible": true
+        },
+        "/husky1/camera/depth/image": {
+          "visible": false
+        },
+        "/husky1/camera/depth/points": {
+          "visible": true,
+          "colorField": "rgb",
+          "colorMode": "rgb",
+          "colorMap": "turbo"
+        },
+        "/husky1/camera/image": {
+          "visible": true,
+          "frameLocked": true,
+          "cameraInfoTopic": "/husky1/camera/camera_info",
+          "distance": 1,
+          "planarProjectionFactor": 0,
+          "renderMode": "default",
+          "projectionFrameId": "husky1_odom",
+          "color": "#ffffff",
+          "rectifyImage": true,
+          "pointSize": 1.5,
+          "syncModeEnabled": false
+        },
+        "/husky1/scan": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo"
+        },
+        "/husky1/scan/points": {
+          "visible": false,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo"
+        },
+        "/move_base_simple/goal": {
+          "visible": false
+        }
+      },
+      "layers": {
+        "grid": {
+          "visible": true,
+          "drawBehind": false,
+          "instanceId": "f0aea043-6211-4da1-8a79-434ae13d878c",
+          "layerId": "foxglove.Grid",
+          "size": 10,
+          "divisions": 10,
+          "lineWidth": 1,
+          "color": "#248eff",
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "synchronize": false,
+      "imageMode": {}
+    },
+    "Image!1d98d0l": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 60,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "synchronize": false,
+      "imageMode": {
+        "imageTopic": "/parrot1/camera/image",
+        "calibrationTopic": "/parrot1/camera/camera_info"
+      }
+    },
+    "map!zjfees": {
+      "customTileUrl": "",
+      "disabledTopics": [],
+      "followTopic": "",
+      "followFrame": "",
+      "layer": "satellite",
+      "topicColors": {},
+      "zoomLevel": 10,
+      "maxNativeZoom": 18,
+      "topicConfig": {},
+      "layers": [
+        {
+          "type": "satellite",
+          "enabled": true,
+          "opacity": 1
+        },
+        {
+          "type": "isobaths",
+          "enabled": true,
+          "opacity": 1
+        }
+      ],
+      "foxglovePanelTitle": "Pick area map"
+    },
+    "Plot!3j620aa": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "",
+          "enabled": true,
+          "color": "#4e98e2",
+          "id": "6a1d4b16-2633-41c6-9b0d-9fb9ce0f167f"
+        }
+      ]
+    },
+    "Indicator!2ybzupr": {
+      "path": "/husky1/robot_description",
+      "style": "background",
+      "fontSize": 36,
+      "fallbackColor": "#a0a0a0",
+      "fallbackLabel": "False",
+      "rules": [
+        {
+          "operator": "=",
+          "rawValue": "true",
+          "color": "#68e24a",
+          "label": "True"
+        }
+      ]
+    },
+    "StateTransitions!3uciery": {
+      "paths": [
+        {
+          "value": "",
+          "timestampMethod": "receiveTime",
+          "customStates": {
+            "type": "discrete",
+            "states": []
+          },
+          "id": "ff6c1e83-d2d8-4272-abdd-ce3dbc163a7d"
+        }
+      ],
+      "isSynced": true,
+      "showLegend": true,
+      "xAxisDisplayMethod": "relative"
+    },
+    "Teleop!3ofaila": {
+      "topic": "/parrot1/cmd_vel",
+      "publishRate": 1,
+      "autoSendStopOnRelease": false,
+      "upButton": {
+        "field": "linear-x",
+        "value": 1
+      },
+      "downButton": {
+        "field": "linear-x",
+        "value": -1
+      },
+      "leftButton": {
+        "field": "angular-z",
+        "value": 1
+      },
+      "rightButton": {
+        "field": "angular-z",
+        "value": -1
+      },
+      "stopButton": {
+        "field": "linear-x",
+        "value": 0
+      }
+    },
+    "Gauge!1qwrshn": {
+      "path": "/parrot1/cmd_vel.linear.x",
+      "style": "dial",
+      "minValue": -2,
+      "maxValue": 2,
+      "tickInterval": 0.1,
+      "showTicks": false,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": [
+        "#0000ff",
+        "#ff00ff"
+      ],
+      "reverse": false,
+      "reverseDirection": false,
+      "origin": 0,
+      "mirrorColorAtOrigin": true
+    },
+    "Teleop!2iawibj": {
+      "topic": "/husky1/cmd_vel",
+      "publishRate": 1,
+      "autoSendStopOnRelease": false,
+      "upButton": {
+        "field": "linear-x",
+        "value": 1
+      },
+      "downButton": {
+        "field": "linear-x",
+        "value": -1
+      },
+      "leftButton": {
+        "field": "angular-z",
+        "value": 1
+      },
+      "rightButton": {
+        "field": "angular-z",
+        "value": -1
+      },
+      "stopButton": {
+        "field": "linear-x",
+        "value": 0
+      }
+    },
+    "Gauge!3rbjxt7": {
+      "path": "/husky1/cmd_vel.linear.x",
+      "style": "dial",
+      "minValue": -2,
+      "maxValue": 2,
+      "tickInterval": 0.1,
+      "showTicks": false,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": [
+        "#0000ff",
+        "#ff00ff"
+      ],
+      "reverse": false,
+      "reverseDirection": false,
+      "origin": 0,
+      "mirrorColorAtOrigin": true
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "first": {
+      "first": "3D!1umvbdc",
+      "second": "Image!1d98d0l",
+      "direction": "row"
+    },
+    "second": {
+      "direction": "row",
+      "first": {
+        "first": "map!zjfees",
+        "second": "Plot!3j620aa",
+        "direction": "row"
+      },
+      "second": {
+        "first": {
+          "first": "Indicator!2ybzupr",
+          "second": "StateTransitions!3uciery",
+          "direction": "column",
+          "splitPercentage": 26.294820717131472
+        },
+        "second": {
+          "first": {
+            "first": "Teleop!3ofaila",
+            "second": "Gauge!1qwrshn",
+            "direction": "row"
+          },
+          "second": {
+            "first": "Teleop!2iawibj",
+            "second": "Gauge!3rbjxt7",
+            "direction": "row"
+          },
+          "direction": "column"
+        },
+        "direction": "row"
+      }
+    },
+    "direction": "column"
+  }
+}

@@ -1,3 +1,13 @@
-// Starts the mission and all nodes
+#include <memory>
 
-// We can create other main files for each robot as well for testing.
+#include <rclcpp/rclcpp.hpp>
+
+#include "mission_node.h"
+
+int main(int argc, char * argv[])
+{
+	rclcpp::init(argc, argv);
+	rclcpp::spin(std::make_shared<MissionNode>());
+	rclcpp::shutdown();
+	return 0;
+}

@@ -6,6 +6,12 @@
   <maintainer email="chalmers.cameronj@gmail.com">Cameron</maintainer>
   <license>TODO: choose project license; subject assets retain their original licenses</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_gtest</buildtool_depend>
+  <depend>geometry_msgs</depend>
+  <depend>rclcpp</depend>
+  <depend>sensor_msgs</depend>
+  <exec_depend>ros_gz_interfaces</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
 
   <!-- Core ROS 2 -->
   
@@ -23,6 +29,7 @@
   <exec_depend>robot_localization</exec_depend>
   <exec_depend>ros_ign_gazebo</exec_depend>
   <exec_depend>ros_ign_bridge</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
   <exec_depend>rosgraph_msgs</exec_depend>
   <exec_depend>rviz2</exec_depend>
   <exec_depend>slam_toolbox</exec_depend>
@@ -30,6 +37,9 @@
   <exec_depend>teleop_twist_keyboard</exec_depend>
   <exec_depend>ros2bag</exec_depend>
   <exec_depend>rosbag2_storage_default_plugins</exec_depend>
+  <depend>vision_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>libopencv-dev</depend>
   <buildtool_depend>rosidl_default_generators</buildtool_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
   <member_of_group>rosidl_interface_packages</member_of_group>
