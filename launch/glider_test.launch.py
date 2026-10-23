@@ -201,7 +201,7 @@ def generate_launch_description():
     ld.add_action(rviz_launch_arg)
 
     ld.add_action(DeclareLaunchArgument(
-        'world', default_value='rs1_world',
+        'world', default_value='rs1_terrain',
         description='World to load'))
 
     ld.add_action(DeclareLaunchArgument(
@@ -244,7 +244,7 @@ def generate_launch_description():
             'ign_args': [
                 PathJoinSubstitution([
                     pkg_path, 'worlds',
-                    [LaunchConfiguration('world'), '.sdf'],
+                    [LaunchConfiguration('world'), '.config'],
                 ]),
                 ' -r',
                 PythonExpression([
