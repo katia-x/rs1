@@ -114,7 +114,7 @@
       <topic>model/${gz_model_name}/scan</topic>
       <update_rate>3</update_rate>
       <gz_frame_id>${prefix}base_scan</gz_frame_id>
-      <ray>
+      <lidar>
         <scan>
           <horizontal>
             <samples>360</samples>
@@ -122,6 +122,12 @@
             <min_angle>0.0</min_angle>
             <max_angle>6.28319</max_angle>
           </horizontal>
+          <vertical>
+            <samples>16</samples>
+            <resolution>1</resolution>
+            <min_angle>-0.261799</min_angle>
+            <max_angle>0.261799</max_angle>
+          </vertical>
         </scan>
         <range>
           <min>0.2</min>
@@ -133,7 +139,7 @@
           <mean>0.0</mean>
           <stddev>0.01</stddev>
         </noise>
-      </ray>
+      </lidar>
       <always_on>true</always_on>
     </sensor>
   </gazebo>
