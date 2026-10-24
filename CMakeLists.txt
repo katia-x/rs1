@@ -14,13 +14,15 @@ find_package(tf2_ros REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(vision_msgs REQUIRED)
-find_package(cv_bridge REQUIRED)
-find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
+find_package(tf2 REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/WombatNextGoal.srv"
   DEPENDENCIES geometry_msgs
 )
+ament_target_dependencies(mission_node geometry_msgs rclcpp sensor_msgs vision_msgs tf2 tf2_geometry_msgs tf2_ros)
 
 add_executable(mission_node src/mission_node.cpp)
 ament_target_dependencies(
@@ -48,8 +50,13 @@ ament_add_gtest(mission_processing_test
   test/basic_tests.cpp
   src/mission_processing.cpp
 )
-ament_target_dependencies(mission_processing_test geometry_msgs rclcpp sensor_msgs)
+ament_target_dependencies(mission_processing_test geometry_msgs rclcpp sensor_msgs vision_msgs tf2 tf2_geometry_msgs tf2_ros)
 target_include_directories(mission_processing_test PRIVATE src)
+
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(cv_bridge REQUIRED)
+find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
 
 add_executable(plant_detector
   src/plant_perception/plant_detector.cpp
