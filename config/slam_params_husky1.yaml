@@ -7,7 +7,7 @@
     ceres_dogleg_type: TRADITIONAL_DOGLEG
     ceres_loss_function: None
     odom_frame: husky1_odom
-    map_frame: husky1_map
+    map_frame: map
     base_frame: husky1_base_link
     scan_topic: scan
     use_map_saver: true

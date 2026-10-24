@@ -6,13 +6,33 @@
   <maintainer email="chalmers.cameronj@gmail.com">Cameron</maintainer>
   <license>TODO: choose project license; subject assets retain their original licenses</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>rosidl_default_generators</buildtool_depend>
   <buildtool_depend>ament_cmake_gtest</buildtool_depend>
-  <depend>geometry_msgs</depend>
-  <depend>rclcpp</depend>
+  <build_depend>geometry_msgs</build_depend>
+  <build_depend>nav2_msgs</build_depend>
+  <build_depend>rclcpp</build_depend>
+  <build_depend>rclcpp_action</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <build_depend>tf2</build_depend>
+  <build_depend>tf2_geometry_msgs</build_depend>
+  <build_depend>tf2_ros</build_depend>
   <depend>sensor_msgs</depend>
   <depend>tf2</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>tf2_ros</depend>
+  <depend>vision_msgs</depend>
+  <depend>cv_bridge</depend>
+  <depend>libopencv-dev</depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav2_msgs</exec_depend>
+  <exec_depend>rclcpp</exec_depend>
+  <exec_depend>rclcpp_action</exec_depend>
+  <exec_depend>rosidl_default_runtime</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>tf2</exec_depend>
+  <exec_depend>tf2_geometry_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <member_of_group>rosidl_interface_packages</member_of_group>
   <exec_depend>ros_gz_interfaces</exec_depend>
   <exec_depend>std_srvs</exec_depend>
   <exec_depend>launch</exec_depend>
@@ -30,9 +50,6 @@
   <exec_depend>teleop_twist_keyboard</exec_depend>
   <exec_depend>ros2bag</exec_depend>
   <exec_depend>rosbag2_storage_default_plugins</exec_depend>
-  <depend>vision_msgs</depend>
-  <depend>cv_bridge</depend>
-  <depend>libopencv-dev</depend>
   <export>
     <build_type>ament_cmake</build_type>
   </export>

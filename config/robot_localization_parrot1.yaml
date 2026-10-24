@@ -5,7 +5,7 @@
     two_d_mode: false
     publish_acceleration: false
     publish_tf: true
-    map_frame: map
+    map_frame: parrot1_map
     odom_frame: parrot1_odom
     base_link_frame: parrot1_base_link
     world_frame: parrot1_odom
