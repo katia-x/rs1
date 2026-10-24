@@ -489,7 +489,7 @@ def generate_launch_description():
     ld.add_action(Node(
         package='rs1', executable='mission_node', name='mission_node',
         output='screen',
-        parameters=[{
+        parameters=[PathJoinSubstitution([config_path, 'mission_params.yaml']), {
             'use_sim_time': use_sim_time,
             'global_frame': 'map',
             'wombat_base_frame': 'husky1_base_link',

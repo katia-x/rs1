@@ -7,6 +7,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
+find_package(rcl_interfaces REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -14,6 +15,7 @@ find_package(tf2_ros REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(vision_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -21,13 +23,17 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   DEPENDENCIES geometry_msgs
 )
 
-add_executable(mission_node src/mission_node.cpp)
+add_executable(mission_node src/main.cpp src/mission_node.cpp src/mission_processing.cpp)
+target_compile_features(mission_node PRIVATE cxx_std_17)
 ament_target_dependencies(
   mission_node
   geometry_msgs
   rclcpp
+  rcl_interfaces
   std_msgs
   vision_msgs
+  sensor_msgs
+  visualization_msgs
   tf2
   tf2_geometry_msgs
   tf2_ros
@@ -47,6 +53,7 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(mission_processing_test
     test/basic_tests.cpp
+    test/weed_estimation_tests.cpp
     src/mission_processing.cpp
     SKIP_LINKING_MAIN_LIBRARIES
   )
@@ -55,6 +62,14 @@ if(BUILD_TESTING)
     ament_target_dependencies(mission_processing_test geometry_msgs rclcpp sensor_msgs vision_msgs tf2 tf2_geometry_msgs tf2_ros)
     target_include_directories(mission_processing_test PRIVATE src)
   endif()
+  ament_add_test(weed_target_integration
+    COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test/weed_target_integration.py"
+      "$<TARGET_FILE:mission_node>" "${CMAKE_CURRENT_SOURCE_DIR}/config/mission_params.yaml"
+    APPEND_ENV "PYTHONPATH=${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_py"
+    APPEND_LIBRARY_DIRS "${CMAKE_CURRENT_BINARY_DIR}"
+    GENERATE_RESULT_FOR_RETURN_CODE_ZERO
+    TIMEOUT 40
+  )
 endif()
 
 add_executable(plant_detector

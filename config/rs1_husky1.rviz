@@ -31,6 +31,28 @@ Panels:
 Visualization Manager:
   Class: ''
   Displays:
+  - Class: rviz_default_plugins/MarkerArray
+    Enabled: true
+    Name: Weed estimates
+    Namespaces: {}
+    Topic:
+      Depth: 1
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /husky1/weed_estimate_markers
+    Value: true
+  - Class: rviz_default_plugins/Marker
+    Enabled: true
+    Name: Target weed
+    Namespaces: {}
+    Topic:
+      Depth: 1
+      Durability Policy: Transient Local
+      History Policy: Keep Last
+      Reliability Policy: Reliable
+      Value: /husky1/target_weed_marker
+    Value: true
   - Class: rviz_default_plugins/Image
     Enabled: true
     Name: Plant detections
