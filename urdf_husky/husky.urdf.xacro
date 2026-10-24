@@ -186,7 +186,6 @@
 
   <!-- Simulated RGB and depth share the sensor origin (no physical baseline). -->
   <joint name="${prefix}camera_optical_joint" type="fixed">
-    <!--<origin xyz="0 0 0" rpy="-1.5707963267948966 0 -1.5707963267948966"/>-->
     <origin xyz="0 0 0" rpy="-1.5707963267948966 0 -1.5707963267948966"/>
     <parent link="${prefix}camera_link"/>
     <child link="${prefix}camera_optical_frame"/>
