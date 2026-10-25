@@ -81,6 +81,8 @@ MissionNode::MissionNode()
 		"/husky1/target_weed_marker", rclcpp::QoS(1).transient_local());
 	estimate_markers_publisher_ = create_publisher<visualization_msgs::msg::MarkerArray>(
 		"/husky1/weed_estimate_markers", rclcpp::QoS(1).transient_local());
+	permanent_weed_publisher_ = create_publisher<geometry_msgs::msg::PoseArray>(
+		"/husky1/permanent_weed_exclusions", rclcpp::QoS(1).transient_local());
 	weed_timer_ = create_wall_timer(std::chrono::milliseconds(200),
 		std::bind(&MissionNode::update_weed_target, this));
 	next_goal_service_ = create_service<rs1::srv::WombatNextGoal>(
@@ -105,6 +107,17 @@ void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr
 			get_logger(),
 			"Ignoring region in frame '%s'; expected '%s'",
 			message->header.frame_id.c_str(), global_frame_.c_str());
+		return;
+	}
+	const bool same_region = region_vertices_.size() == message->poses.size() &&
+		std::equal(region_vertices_.begin(), region_vertices_.end(), message->poses.begin(),
+			[](const auto & current, const auto & incoming) {
+				return current.position.x == incoming.position.x &&
+					current.position.y == incoming.position.y &&
+					current.position.z == incoming.position.z;
+			});
+	if (same_region) {
+		RCLCPP_DEBUG(get_logger(), "Ignoring duplicate region snapshot");
 		return;
 	}
 	region_vertices_ = message->poses;
@@ -154,6 +167,16 @@ void MissionNode::update_weed_target()
 	}
 	// Perception remains visible even without an eligible current-lane target.
 	publish_weed_estimates(time);
+	geometry_msgs::msg::PoseArray permanent_weeds;
+	permanent_weeds.header.frame_id = global_frame_;
+	permanent_weeds.header.stamp = time;
+	for (const auto & weed : mission_processing_->permanent_weeds()) {
+		geometry_msgs::msg::Pose pose;
+		pose.position = weed.position;
+		pose.orientation.w = 1.0;
+		permanent_weeds.poses.push_back(pose);
+	}
+	permanent_weed_publisher_->publish(permanent_weeds);
 	// Odd endpoints are active search lanes. Even endpoints are connectors
 	// between lanes; no weed is selected during those transitions.
 	if (search_goal_index_ == 0 || search_goal_index_ >= search_lines_.size() || search_goal_index_ % 2 == 0) {

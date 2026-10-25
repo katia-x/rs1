@@ -52,6 +52,7 @@ private:
 	rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr target_publisher_;
 	rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_publisher_;
 	rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr estimate_markers_publisher_;
+	rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr permanent_weed_publisher_;
 	rclcpp::TimerBase::SharedPtr weed_timer_;
 	rclcpp::Service<rs1::srv::WombatNextGoal>::SharedPtr next_goal_service_;
 	std::shared_ptr<tf2_ros::Buffer> tf_buffer_;

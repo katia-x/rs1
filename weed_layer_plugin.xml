@@ -1,0 +1,5 @@
+<library path="weed_override_layer">
+  <class type="WeedOverrideLayer" base_class_type="nav2_costmap_2d::Layer">
+    <description>Clears costmap cells occupied by persistent known weeds.</description>
+  </class>
+</library>

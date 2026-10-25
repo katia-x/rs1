@@ -125,7 +125,7 @@ controller_server:
       yaw_goal_tolerance: 0.5
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-      desired_linear_vel: 1.5
+      desired_linear_vel: 0.75
       lookahead_dist: 0.6
       min_lookahead_dist: 0.3
       max_lookahead_dist: 0.9
@@ -161,11 +161,12 @@ local_costmap:
       footprint: '[ [0.5, 0.5], [0.5, -0.5], [-0.5, -0.5], [-0.5, 0.5] ]'
       plugins:
       - obstacle_layer
+      - weed_override_layer
       - inflation_layer
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 3.0
-        inflation_radius: 2.5
+        inflation_radius: 1.0
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
@@ -182,6 +183,11 @@ local_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 10.0
           obstacle_min_range: 0.0
+      weed_override_layer:
+        plugin: WeedOverrideLayer
+        enabled: true
+        weed_topic: /husky1/permanent_weed_exclusions
+        override_radius: 0.35
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
         map_subscribe_transient_local: true
@@ -202,6 +208,7 @@ global_costmap:
       plugins:
       - static_layer
       - obstacle_layer
+      - weed_override_layer
       - inflation_layer
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
@@ -219,6 +226,11 @@ global_costmap:
           raytrace_min_range: 0.0
           obstacle_max_range: 10.0
           obstacle_min_range: 0.0
+      weed_override_layer:
+        plugin: WeedOverrideLayer
+        enabled: true
+        weed_topic: /husky1/permanent_weed_exclusions
+        override_radius: 0.35
       static_layer:
         plugin: nav2_costmap_2d::StaticLayer
         map_subscribe_transient_local: true

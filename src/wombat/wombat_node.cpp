@@ -11,7 +11,12 @@ WombatNode::WombatNode()
 	mission_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
-	mission_retry_timer_ = create_wall_timer(1s, [this]() { request_next_goal(); });
+	mission_retry_timer_ = create_wall_timer(1s, [this]() {
+		const bool skip_current_goal = retry_pending_ && retry_skip_current_goal_;
+		retry_pending_ = false;
+		retry_skip_current_goal_ = false;
+		request_next_goal(skip_current_goal);
+	});
 	request_next_goal();
 }
 
@@ -40,7 +45,7 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 		mission_request_in_flight_ = false;
 
 		if (!response->success) {
-			request_next_goal();
+			schedule_retry(false);
 			return;
 		}
 
@@ -56,12 +61,13 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 				get_logger(),
 				"Waypoint (%.2f, %.2f) repeated without progress; skipping it",
 				response->goal.pose.position.x, response->goal.pose.position.y);
-			request_next_goal(true);
+			schedule_retry(true);
 			return;
 		}
 
 		if (!navigation_client_->wait_for_action_server(2s)) {
 			RCLCPP_WARN(get_logger(), "Nav2 NavigateToPose action is not available yet");
+			schedule_retry(false);
 			return;
 		}
 
@@ -79,7 +85,7 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 	} catch (const std::exception & error) {
 		mission_request_in_flight_ = false;
 		RCLCPP_WARN(get_logger(), "Mission service call failed: %s", error.what());
-		request_next_goal();
+		schedule_retry(false);
 	}
 }
 
@@ -87,7 +93,7 @@ void WombatNode::handle_nav_goal_response(NavigateGoalHandle::SharedPtr goal_han
 {
 	if (!goal_handle) {
 		RCLCPP_ERROR(get_logger(), "Nav2 rejected the goal; skipping it");
-		request_next_goal(true);
+		schedule_retry(true);
 		return;
 	}
 
@@ -104,7 +110,13 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 	}
 
 	RCLCPP_WARN(get_logger(), "Nav2 failed to reach the goal; skipping it");
-	request_next_goal(true);
+	schedule_retry(true);
+}
+
+void WombatNode::schedule_retry(bool skip_current_goal)
+{
+	retry_pending_ = true;
+	retry_skip_current_goal_ = retry_skip_current_goal_ || skip_current_goal;
 }
 
 int main(int argc, char ** argv)

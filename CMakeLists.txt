@@ -5,6 +5,8 @@ find_package(ament_cmake REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rcl_interfaces REQUIRED)
@@ -49,6 +51,20 @@ ament_target_dependencies(
 )
 rosidl_target_interfaces(wombat_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
+add_library(weed_override_layer SHARED
+  src/weed_override_layer.cpp
+)
+target_include_directories(weed_override_layer PRIVATE src)
+ament_target_dependencies(
+  weed_override_layer
+  geometry_msgs
+  nav2_costmap_2d
+  pluginlib
+  rclcpp
+  tf2_geometry_msgs
+  tf2_ros
+)
+
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(mission_processing_test
@@ -84,6 +100,10 @@ target_link_libraries(plant_detector ${OpenCV_LIBS})
 install(TARGETS plant_detector DESTINATION lib/${PROJECT_NAME})
 install(DIRECTORY machine_learning/models/ DESTINATION share/${PROJECT_NAME}/machine_learning/models
   FILES_MATCHING PATTERN "*.onnx")
+install(TARGETS weed_override_layer
+  LIBRARY DESTINATION lib
+)
+pluginlib_export_plugin_description_file(nav2_costmap_2d weed_layer_plugin.xml)
 
 install(DIRECTORY launch config worlds urdf_husky urdf_parrot
   DESTINATION share/${PROJECT_NAME}

@@ -24,7 +24,7 @@ models on ROS 2 Humble / Gazebo Fortress. From this repository directory:
 source /opt/ros/humble/setup.bash
 colcon build --packages-select rs1 --symlink-install
 source install/setup.bash
-ros2 launch rs1 rs1_demo.launch.py
+ros2 launch rs1 rs1_demo.launch.py rviz:=true
 ```
 
 To run the GUI, in another window run

@@ -516,7 +516,7 @@ def generate_launch_description():
         period=LaunchConfiguration('mission_region_delay'),
         actions=[ExecuteProcess(
             cmd=[
-                'ros2', 'topic', 'pub', '--rate', '1', '--times', '5',
+                'ros2', 'topic', 'pub', '--once',
                 '/region', 'geometry_msgs/msg/PoseArray', MISSION_REGION,
             ],
             output='screen',

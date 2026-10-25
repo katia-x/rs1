@@ -21,6 +21,7 @@ private:
 	void handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future);
 	void handle_nav_goal_response(rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle);
 	void handle_nav_result(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result);
+	void schedule_retry(bool skip_current_goal);
 
 	const std::string global_frame_;
 
@@ -34,6 +35,8 @@ private:
 	bool last_goal_valid_{false};
 	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
 	bool mission_request_in_flight_{false};
+	bool retry_pending_{false};
+	bool retry_skip_current_goal_{false};
 };
 
 #endif
