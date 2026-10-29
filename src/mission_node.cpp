@@ -128,6 +128,7 @@ void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr
 
 void MissionNode::clear_weed_target()
 {
+	selected_weed_.reset();
 	selected_weed_id_.reset();
 	if (!target_visible_) { return; }
 	visualization_msgs::msg::Marker marker;
@@ -191,6 +192,7 @@ void MissionNode::update_weed_target()
 	const auto target = mission_processing_->select_target(
 		robot.pose.position, lane, region_vertices_, selected_weed_id_);
 	if (!target) { clear_weed_target(); return; }
+	selected_weed_ = target;
 	selected_weed_id_ = target->id;
 	geometry_msgs::msg::PointStamped point;
 	point.header.frame_id = global_frame_;
@@ -310,7 +312,7 @@ void MissionNode::build_search_lines()
 	}
 }
 
-// Continue returning search goals. Weed estimates are currently display-only.
+// Continue returning search goals, or a nearby selected weed target.
 void MissionNode::serve_next_goal(
 	const std::shared_ptr<rs1::srv::WombatNextGoal::Request> request,
 	std::shared_ptr<rs1::srv::WombatNextGoal::Response> response)
@@ -319,6 +321,7 @@ void MissionNode::serve_next_goal(
 	response->success = true;
 	response->goal.header.frame_id = global_frame_;
 	response->goal.pose.orientation.w = 1.0;
+	response->weed_id = 0; //null
 
 	geometry_msgs::msg::PoseStamped robot_pose;
 	if (!current_pose(robot_pose)) {
@@ -358,18 +361,23 @@ void MissionNode::serve_next_goal(
 		return;
 	}
 
-	const double lookahead = std::max(0.0, search_goal_distance_);
-	response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
-	if (robot_pose.pose.position.y < search_lines_[search_goal_index_].pose.position.y) {
-		response->goal.pose.position.y = std::min(
-			robot_pose.pose.position.y + lookahead,
-			search_lines_[search_goal_index_].pose.position.y);
+	if (selected_weed_ && distance(robot_pose.pose.position, selected_weed_->position) < search_goal_distance_) {
+		response->goal.pose.position = selected_weed_->position;
+		response->is_weed = true;
+		response->weed_id = selected_weed_->id;
 	} else {
-		response->goal.pose.position.y = std::max(
-			robot_pose.pose.position.y - lookahead,
-			search_lines_[search_goal_index_].pose.position.y);
+		const double lookahead = std::max(0.0, search_goal_distance_);
+		response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
+		if (robot_pose.pose.position.y < search_lines_[search_goal_index_].pose.position.y) {
+			response->goal.pose.position.y = std::min(
+				robot_pose.pose.position.y + lookahead,
+				search_lines_[search_goal_index_].pose.position.y);
+		} else {
+			response->goal.pose.position.y = std::max(
+				robot_pose.pose.position.y - lookahead,
+				search_lines_[search_goal_index_].pose.position.y);
+		}
 	}
-
 	const double heading = std::atan2(
 		response->goal.pose.position.y - robot_pose.pose.position.y,
 		response->goal.pose.position.x - robot_pose.pose.position.x);

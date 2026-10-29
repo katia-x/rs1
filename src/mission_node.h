@@ -58,6 +58,7 @@ private:
 	std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 	std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 	std::unique_ptr<MissionProcessing> mission_processing_;
+	std::optional<MissionProcessing::WeedEstimate> selected_weed_;
 	std::optional<std::uint64_t> selected_weed_id_;
 	bool target_visible_{false};
 };

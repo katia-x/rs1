@@ -33,6 +33,8 @@ private:
 	NavigateGoalHandle::SharedPtr active_goal_;
 	geometry_msgs::msg::PoseStamped last_goal_;
 	bool last_goal_valid_{false};
+	bool last_goal_is_weed_{false};
+	std::uint64_t last_weed_id_;
 	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
 	bool mission_request_in_flight_{false};
 	bool retry_pending_{false};

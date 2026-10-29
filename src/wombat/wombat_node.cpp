@@ -75,6 +75,11 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 		goal.pose = response->goal;
 		last_goal_ = response->goal;
 		last_goal_valid_ = true;
+		last_goal_is_weed_ = response->is_weed;
+
+		if (last_goal_is_weed_) {
+			last_weed_id_ = response->weed_id;
+		}
 
 		rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
 		options.goal_response_callback = std::bind(
@@ -106,6 +111,7 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 	active_goal_.reset();
 	if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
 		RCLCPP_INFO(get_logger(), "Nav2 reached the goal");
+		//SERVICE CALL TO REMOVE WEED
 		return;
 	}
 
