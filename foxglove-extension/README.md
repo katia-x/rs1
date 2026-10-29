@@ -1,64 +1,58 @@
-# RS1 Foxglove region-selection extension
+# RS1 Foxglove extension development
 
-This folder contains the custom Foxglove panel for selecting and publishing a
-mission region. It is a separate TypeScript project and is not built by the
-ROS 2 `colcon` build.
+This is the maintainer guide for the RS1 custom Foxglove Web panel. It covers
+creating, editing, testing, formatting, and packaging the panel as a `.foxe`
+file.
 
-The panel publishes one `geometry_msgs/msg/PoseArray` message to `/region`.
-The default frame is `map`. It only reports that the message was published and
-later observed; it does not report mission acceptance.
+For people who only need to use a ready-made extension, see
+[`README-user.md`](README-user.md).
+
+The extension publishes one `geometry_msgs/msg/PoseArray` message to `/region`
+in the `map` frame by default. It does not report mission acceptance because no
+region acknowledgement topic exists.
+
+## Important distinction: panel code versus layout
+
+- The TypeScript and CSS under `src/` define the panel and are packaged into a
+  `.foxe` file.
+- A Foxglove layout is created and arranged in Foxglove Web. It contains panel
+  placement, topic selections, and saved panel state.
+- The layout is not compiled into the `.foxe` file. Export or share the layout
+  separately if other users need the same arrangement.
 
 ## Requirements
 
 - Node.js 18 or newer
 - npm
-- Foxglove Desktop for local extension development, or an installation of the
-  packaged extension supported by your Foxglove Web organization
-- A running ROS 2 system with `foxglove_bridge`
+- Foxglove Web
+- ROS 2 Humble with `foxglove_bridge` for live testing
 
-The bridge can be installed on ROS 2 Humble with:
-
-```bash
-sudo apt update
-sudo apt install ros-humble-foxglove-bridge
-```
-
-### Install Node.js and npm
-
-If `npm: command not found` is displayed, install Node.js 18 or newer. The
-recommended Ubuntu setup uses `nvm`, which keeps the extension's Node.js
-version separate from system packages:
+If `npm` is unavailable on Ubuntu, install Node.js with `nvm`:
 
 ```bash
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
 source ~/.bashrc
 nvm install 20
 nvm use 20
-```
-
-Verify the installation:
-
-```bash
 node --version
 npm --version
 ```
 
-If either command is still unavailable, close and reopen the terminal, then
-run `nvm use 20`. The `nvm` command must be run in every new shell unless the
-installer has added its initialization to your shell startup file.
+## First-time developer setup
 
-## First-time setup
+From the extension directory:
 
-From the repository root, build and launch the ROS 2 system in one terminal:
+```bash
+cd ~/git/rs1/foxglove-extension
+npm install
+```
+
+Start the ROS system and bridge in separate terminals for live testing:
 
 ```bash
 source /opt/ros/humble/setup.bash
-colcon build --packages-select rs1 --symlink-install
-source install/setup.bash
 ros2 launch rs1 rs1_demo.launch.py
 ```
-
-Start the Foxglove bridge in another terminal:
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -66,90 +60,151 @@ ros2 launch foxglove_bridge foxglove_bridge_launch.xml \
   port:=8765 use_sim_time:=true
 ```
 
-Verify that the topic has the expected type:
+Check the ROS contract:
 
 ```bash
 ros2 topic type /region
 # geometry_msgs/msg/PoseArray
 ```
 
-Then install the extension dependencies:
+## Create and edit the panel
+
+The entry point is [`src/index.ts`](src/index.ts). It registers the panel with
+Foxglove.
+
+The panel behavior is in
+[`src/RegionSelectionPanel.tsx`](src/RegionSelectionPanel.tsx). Update this
+file when changing:
+
+- Region selection and validation
+- Published message fields
+- Topic subscriptions
+- Foxglove panel state
+- Panel controls and status text
+
+Styles are in [`src/styles.css`](src/styles.css). Keep CSS imports in the
+panel source so the webpack build includes them.
+
+When adding dependencies, update `package.json` and run:
 
 ```bash
-cd foxglove-extension
 npm install
 ```
 
-Build and install the extension into Foxglove Desktop:
+Commit the resulting `package-lock.json` with the manifest change.
+
+## Format, lint, and build
+
+After editing the panel:
 
 ```bash
+npm run lint
 npm run build
-npm run local-install
 ```
 
-Reload Foxglove Desktop. Add a panel and choose **RS1 region selection**.
-Connect the layout to:
+The build output is placed in `dist/`. It is an intermediate artifact and
+should not be edited manually.
+
+The build must complete before packaging. If the build reports a missing CSS
+loader, run `npm install`; the panel requires `style-loader` and `css-loader`.
+
+## Test in Foxglove Web
+
+Foxglove Web connects to the local bridge at:
 
 ```text
 ws://localhost:8765
 ```
 
-Set the panel's global and region frames to the mission node's
-`global_frame` value, normally `map`.
+Use the Foxglove Web extension workflow to load the development or packaged
+extension. Add the **RS1 region selection** panel to a layout, then configure:
 
-## Running it after setup
+- Global frame: `map`
+- Region frame: `map`
+- Topic: `/region`
 
-Each time you use the GUI:
+Test that:
 
-1. Start the ROS 2 simulation or robot system.
-2. Start `foxglove_bridge` on port `8765`.
-3. Open Foxglove Desktop and use the saved layout containing **RS1 region
-   selection**.
-4. Confirm the layout is connected to `ws://localhost:8765`.
+- Fewer than three points are rejected.
+- A wrong frame is rejected.
+- A zero-area polygon is rejected.
+- A self-intersecting polygon is rejected.
+- A valid polygon publishes one `/region` message.
+- **Last observed** updates when `/region` is received.
+- Reconnecting or reopening the panel does not republish a previous region.
 
-You do not need to run `npm install` again unless dependencies change or
-`node_modules` has been removed. You do not need to run `npm run build` again
-unless the extension source has changed.
+## Create and format a Foxglove layout
 
-If Foxglove does not show the panel after restarting, run:
+After the extension is installed in Foxglove Web:
+
+1. Create a new layout, or open the layout you want to edit.
+2. Connect it to `ws://localhost:8765`.
+3. Add the **RS1 region selection** panel.
+4. Add standard panels for the camera, detections, 3D view, laser scan, and
+   raw `/region` messages as needed.
+5. Resize panels by dragging their borders and reorder them to create the
+   operator view.
+6. Configure the region panel's global frame, region frame, and topic.
+7. Save the layout.
+8. Export or share the layout separately when other users need the same panel
+   arrangement.
+
+The layout's panel arrangement is not part of the `.foxe` file. The `.foxe`
+contains the extension code; the layout contains the workspace arrangement and
+panel settings. A release that includes a prepared operator view should
+therefore distribute both files.
+
+## Build a `.foxe` file
+
+Ensure [`CHANGELOG.md`](CHANGELOG.md) is present and update it for meaningful
+panel changes. Then run:
 
 ```bash
-npm run local-install
+npm run package
 ```
 
-Then reload Foxglove Desktop.
+The command runs the production build and creates a `.foxe` file in the
+extension directory. The `.foxe` file is the distributable extension package.
 
-The first `npm run local-install` may fail if the extension has no
-`CHANGELOG.md`. This file is required by Foxglove's packaging tool and is
-included in this project. After pulling this file, rerun:
-
-```bash
-npm run local-install
-```
-
-If `npm run build` reports a missing `@foxglove/tsconfig/tsconfig.json`, make
-sure you are building the same checkout where you installed the dependencies.
-The extension now uses a self-contained `tsconfig.json`, so this error usually
-means that an older checkout or an old `node_modules` tree is being used.
-Check the paths before reinstalling:
-
-```bash
-pwd
-test -f package.json
-test -f tsconfig.json
-grep -n '"@foxglove/tsconfig"' package.json
-```
-
-`pwd` should be the extension directory you intend to use, and the final
-command should produce no output. Then refresh dependencies and build:
+Use a new semantic version in `package.json` for a release that is distributed
+to other users, and add a matching section to `CHANGELOG.md`. Re-run:
 
 ```bash
 npm install
-npm run build
+npm run lint
+npm run package
 ```
 
-If the build still mentions `@foxglove/tsconfig`, remove only that checkout's
-installed dependencies and lockfile, then install again:
+Do not commit `node_modules/`, `dist/`, or generated `.foxe` files unless the
+repository's release process explicitly requires them.
+
+## Distribute the extension and layout
+
+For Foxglove Web users:
+
+1. Provide the generated `.foxe` file.
+2. Provide an exported Foxglove layout separately if a pre-arranged layout is
+   required.
+3. Tell users to drag the `.foxe` file into the Foxglove Web window.
+4. Tell users to import or open the layout after the extension is loaded.
+
+The bridge still needs to be running at `ws://localhost:8765` for local ROS
+testing.
+
+## Troubleshooting
+
+If the build mentions an old `@foxglove/tsconfig` path, confirm that the
+symlinked checkout is the one being used:
+
+```bash
+pwd
+readlink -f .
+test -f package.json
+test -f tsconfig.json
+```
+
+The extension has a self-contained `tsconfig.json`. If an old dependency tree
+is being used, refresh only this extension:
 
 ```bash
 rm -rf node_modules package-lock.json
@@ -157,73 +212,4 @@ npm install
 npm run build
 ```
 
-Do not run those removal commands from the repository root. The
-The extension's TypeScript settings are kept in its local `tsconfig.json`, so
-no separate shared TypeScript configuration package is required.
-
-If the build reports `TypeScript emitted no output`, make sure your checkout
-contains the current `tsconfig.json`. It must not set `noEmit` to `true`;
-Foxglove's webpack bundler needs TypeScript to emit the intermediate output.
-
-If the build reports `Can't resolve 'style-loader'`, update the dependencies
-from the extension directory. The panel imports `src/styles.css`, which
-requires both `style-loader` and `css-loader`:
-
-```bash
-npm install
-npm run build
-```
-
-## Making and testing changes
-
-Edit the TypeScript or CSS files under `src/`. The main entry point is
-[`src/index.ts`](src/index.ts), which registers the panel. The panel UI and
-region-publishing behavior are in
-[`src/RegionSelectionPanel.tsx`](src/RegionSelectionPanel.tsx), and styling is
-in [`src/styles.css`](src/styles.css).
-
-After changing the extension:
-
-```bash
-npm run build
-npm run lint
-npm run local-install
-```
-
-Reload Foxglove Desktop to load the new build. Reconnect to the bridge if
-necessary, then verify:
-
-- The panel opens without errors.
-- At least three vertices are required.
-- Wrong frames, zero-area polygons, and self-crossing polygons are rejected.
-- A valid region publishes exactly one `/region` message.
-- **Last observed** updates when the topic is received back through the
-  bridge.
-- Reopening or reconnecting the panel does not republish a previous region.
-
-When changing dependencies, update `package.json` and run:
-
-```bash
-npm install
-npm run build
-```
-
-When changing the published message type or topic, update the panel code,
-mission-node contract, and the documentation together. Confirm the new ROS
-type with `ros2 topic type` before testing in Foxglove.
-
-## Packaging for another installation
-
-To create a distributable Foxglove extension package:
-
-```bash
-npm run package
-```
-
-This creates a `.foxe` file in this directory. Install that file through the
-Foxglove Desktop extensions manager, or publish it through the appropriate
-Foxglove organization workflow. Re-run `npm run package` whenever source or
-dependency changes need to be distributed.
-
-For the complete ROS and Foxglove setup, see
-[`docs/foxglove-extension.md`](../docs/foxglove-extension.md).
+Do not run that removal command from the repository root.

@@ -1,4 +1,4 @@
-# Foxglove web setup
+# Foxglove Web setup
 
 Phase 2 provides the `rs1-region-selection` custom Foxglove panel. It is
 intentionally a separate TypeScript project in
@@ -33,7 +33,7 @@ The bridge is a WebSocket server. Keep it on localhost for development
 (`ws://localhost:8765`); do not expose an unauthenticated bridge to an
 untrusted network.
 
-## 2. Build the extension
+## 2. Build the extension (maintainers)
 
 Install Node.js 18 or newer. On Ubuntu, `nvm` is a convenient way to install
 the required version without changing the system Node.js packages:
@@ -61,51 +61,37 @@ npm install
 npm run build
 ```
 
-make sure foxglvoe desktop is installed
-```
-https://foxglove.dev/download
-```
-
-For Foxglove Desktop, install the extension into the local application:
-
-```bash
-npm run local-install
-```
-
-The extension package must include `CHANGELOG.md`; it is already included in
-the repository. If an older checkout reports
-`Missing required file .../CHANGELOG.md`, update the checkout and rerun
-`npm run local-install`.
-
-Reload Foxglove Desktop, add a panel, and choose **RS1 region selection**.
-
-To package it for another desktop installation:
+The extension package must include [`CHANGELOG.md`](../foxglove-extension/CHANGELOG.md).
+To create a Web-installable package:
 
 ```bash
 npm run package
 ```
 
-This creates a `.foxe` file. In Foxglove Desktop, open the extensions manager
-and install that file.
+This creates a `.foxe` file. Do not use `npm run local-install`; the project
+uses Foxglove Web rather than Foxglove Desktop.
 
-## 3. Connect Foxglove Web
+## 3. Install and connect Foxglove Web
 
 Open [Foxglove](https://app.foxglove.dev/), create or open a layout, and add
-the **RS1 region selection** panel after the extension is available to the
-client. Connect the layout to:
+the supplied `.foxe` file by dragging it into the Foxglove Web window. After
+the extension is installed, add the **RS1 region selection** panel to the
+layout. Connect the layout to:
 
 ```text
 ws://localhost:8765
 ```
 
-If the web client cannot load a locally developed extension, use Foxglove
-Desktop for extension development and validation. The bridge connection and
-standard panels work in either client; custom extension availability depends on
-the client's extension installation and organization policy.
-
-## run foxglove desktop
+No Foxglove Desktop installation is required. Extension installation can be
+restricted by the Foxglove organization policy; ask an administrator if the
+`.foxe` file cannot be installed.
 
 ## 4. Select and publish a region
+
+For the complete maintainer workflow, see
+[`foxglove-extension/README.md`](../foxglove-extension/README.md). For
+end-user instructions, see
+[`foxglove-extension/README-user.md`](../foxglove-extension/README-user.md).
 
 1. Set **Global frame** to the mission node's `global_frame` parameter
    (normally `map`).
