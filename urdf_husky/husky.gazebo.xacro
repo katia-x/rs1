@@ -174,7 +174,7 @@
       <update_rate>3</update_rate> <!--10-->
       <visualize>$(arg camera_visual)</visualize>
       <topic>/model/${gz_model_name}/camera</topic>
-      <gz_frame_id>${prefix}camera_optical_frame</gz_frame_id>
+      <gz_frame_id>${prefix}camera_link</gz_frame_id>
     </sensor>
   </gazebo>
 

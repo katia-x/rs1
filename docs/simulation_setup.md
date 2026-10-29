@@ -21,9 +21,10 @@ ros2 launch rs1 rs1_demo.launch.py
 Alternatively, build from the outer ROS workspace and source that workspace's
 `install/setup.bash`. Use the same build location consistently.
 
-Both robots start by default. The C++ mission files are still comment-only
-scaffolds, so this package currently installs simulation resources only. The
-Python plant detector is not built or launched by this setup.
+Both robots start by default. The demo also runs the C++ mission, Wombat and
+plant detector nodes. Weed target estimation and display run inside the mission
+node; navigation continues following search goals. See
+[weed estimation](weed_estimation.md) for inputs, tuning and validation.
 
 Useful launch options:
 
@@ -71,10 +72,13 @@ Keep the teleop terminal focused and stop the robot before exiting it.
 | `/husky1/tf`, `/husky1/tf_static` | Robot transforms |
 | `/clock` | Simulation time |
 
-RGB, depth and calibration use `husky1_camera_optical_frame`, located at the
+The bridge publishes the depth cloud directly on `/husky1/camera/depth/points`
+in `husky1_camera_link`, using X forward, Y left, and Z up.
+
+RGB, depth and calibration also use `husky1_camera_link`, located at the
 simulated camera origin. The camera is configured for 3 Hz in simulation time;
-wall-clock throughput depends on simulation performance. These topics are ready
-for later rosbag capture; this launch does not start recording or ML inference.
+wall-clock throughput depends on simulation performance. The demo runs plant
+inference and weed estimation, but does not start rosbag recording.
 
 ## World layout
 
