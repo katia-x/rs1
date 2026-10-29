@@ -46,6 +46,7 @@ ament_target_dependencies(
   nav2_msgs
   rclcpp
   rclcpp_action
+  std_msgs
 )
 rosidl_target_interfaces(wombat_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 

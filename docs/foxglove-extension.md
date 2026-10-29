@@ -71,6 +71,21 @@ npm run package
 This creates a `.foxe` file. Do not use `npm run local-install`; the project
 uses Foxglove Web rather than Foxglove Desktop.
 
+The extension provides two panels:
+
+- **RS1 region selection** for the focused region-publishing workflow.
+- **RS1 Wombat operator** for the top-down `map` view, region overlay,
+  tracked weed markers, Wombat TF position, selected-target marker, and manual
+  override request.
+
+The operator panel observes `/husky1/manual_override`,
+`/husky1/weed_estimate_markers`, `/husky1/target_weed_marker`, and
+`/husky1/tf`. Its override button publishes a single `std_msgs/msg/Bool`
+request to `/husky1/manual_override_command`; it does not publish velocity
+commands. When enabled, the Wombat node cancels/stops autonomous navigation;
+the existing Teleop panel continues publishing
+`geometry_msgs/msg/Twist` directly to `/husky1/cmd_vel`.
+
 ## 3. Install and connect Foxglove Web
 
 Open [Foxglove](https://app.foxglove.dev/), create or open a layout, and add

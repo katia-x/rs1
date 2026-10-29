@@ -5,6 +5,7 @@
 #include <geometry_msgs/msg/pose_stamped.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
+#include <std_msgs/msg/bool.hpp>
 
 #include "rs1/srv/wombat_next_goal.hpp"
 
@@ -21,6 +22,9 @@ private:
 	void handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future);
 	void handle_nav_goal_response(rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle);
 	void handle_nav_result(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result);
+	void override_callback(const std_msgs::msg::Bool::ConstSharedPtr message);
+	void publish_override_state();
+	void cancel_active_goal();
 
 	const std::string global_frame_;
 
@@ -34,6 +38,9 @@ private:
 	bool last_goal_valid_{false};
 	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
 	bool mission_request_in_flight_{false};
+	bool manual_override_{false};
+	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr override_subscription_;
+	rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr override_state_publisher_;
 };
 
 #endif

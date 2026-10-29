@@ -4,6 +4,110 @@
   padding: 1rem;
 }
 
+.operator-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  color: #e8edf2;
+  background: #182028;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.operator-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.operator-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.operator-settings input {
+  color: inherit;
+  background: #27333d;
+  border: 1px solid #536372;
+  padding: 4px;
+}
+
+.operator-status,
+.operator-actions,
+.operator-diagnostics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.operator-status button,
+.operator-actions button {
+  color: inherit;
+  background: #34495a;
+  border: 1px solid #6c8497;
+  border-radius: 3px;
+  padding: 5px 8px;
+}
+
+.status-enabled {
+  color: #ffb36b;
+  font-weight: bold;
+}
+
+.status-disabled {
+  color: #8fd19e;
+  font-weight: bold;
+}
+
+.operator-map {
+  width: 100%;
+  min-height: 280px;
+  background: #10161b;
+  border: 1px solid #536372;
+  cursor: crosshair;
+}
+
+.region-overlay {
+  fill: #3d89b833;
+  stroke: #66b9ee;
+  stroke-width: 0.35;
+}
+
+.draft-region {
+  fill: none;
+  stroke: #f0c674;
+  stroke-width: 0.4;
+  stroke-dasharray: 1.5 1;
+}
+
+.weed-point {
+  fill: #72d6ff;
+  stroke: #d7f5ff;
+  stroke-width: 0.25;
+}
+
+.target-point {
+  fill: #ffbd66;
+  stroke: #fff3d4;
+  stroke-width: 0.5;
+}
+
+.wombat-point {
+  fill: #f26d85;
+  stroke: #fff;
+  stroke-width: 0.4;
+}
+
+.operator-diagnostics {
+  color: #b7c3cc;
+}
+
 .hint {
   color: #aeb6c4;
   max-width: 48rem;

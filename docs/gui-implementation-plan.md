@@ -213,25 +213,98 @@ There is no region acknowledgement topic. The panel should confirm only that
 the message was published and that a later `/region` observation is visible;
 it must not report mission acceptance as a separate state.
 
-### Phase 3: Add current mission visualisation
+### Phase 3: Add operator override and top-down mission map
 
-The current source already supports the first part of mission observability.
-Configure Foxglove to display:
+Phase 3 now covers the operator panel required to combine the existing
+Foxglove teleop controls with mission-region selection and live Wombat
+visualisation. The panel must not directly assume that publishing to the
+teleop topic is safe: the ROS side needs an explicit manual-override gate.
 
-- `/husky1/weed_estimate_markers` as the active global weed estimate set.
-- `/husky1/target_weed_marker` as the selected target.
-- `/husky1/target_weed` as the selected target's frame-aware point.
-- TF between `map`, `husky1_base_link`, and the sensor frames.
+#### Manual driving override
 
-Search lanes and the current search-goal index remain internal to
-`MissionNode`. Add a publisher for those values before presenting them as
-mission progress in the GUI. Likewise, add a mission-status or navigation
-status topic before showing a definitive task state.
+Add a bounded, node-side manual/automatic control contract for Wombat:
+
+- Add a latched or otherwise observable manual-override state topic, for
+  example `/husky1/manual_override`, with an explicit enabled/disabled value.
+- Add a GUI-safe command path for changing that state, using a typed service or
+  equivalent request/response interface rather than an unacknowledged topic
+  toggle.
+- Keep the existing teleop velocity input on `/husky1/cmd_vel`; no separate
+ `manual_cmd_vel` topic or velocity relay is required.
+- When manual override is enabled, cancel the active Nav2 goal and stop
+ requesting autonomous mission goals. The existing Teleop panel can then
+ publish directly to `/husky1/cmd_vel`.
+- Make the override state observable so the panel can distinguish an active
+ manual mode from a request that has not yet been applied.
+- Add an acknowledgement/result or observable state transition so the panel
+  can distinguish a requested toggle from an applied toggle.
+- Apply node-side velocity limits, command timeout/dead-man behavior, and
+  safe zero-command handling independently of Foxglove validation.
+
+The existing teleop operation remains the source of manual
+`geometry_msgs/msg/Twist` input on `/husky1/cmd_vel`. The custom panel should
+only control the override state and should not persist or replay velocity
+commands. The override control must default to disabled on startup and
+reconnect. Re-enabling automatic mode resumes the existing mission/Nav2 loop.
+
+#### Custom top-down map panel
+
+Extend the separate TypeScript Foxglove extension with an operator panel that
+provides a top-down XY view in the configured global frame, normally `map`.
+The panel must:
+
+1. Subscribe to `/region` and render the latest region polygon.
+2. Allow the operator to select or edit region vertices in the map view and
+   publish exactly one validated `geometry_msgs/msg/PoseArray` after
+   confirmation.
+3. Subscribe to `/husky1/weed_estimate_markers` and render all active tracked
+   weed locations as XY points, ignoring the initial `DELETEALL` marker when
+   calculating the displayed estimate set.
+4. Subscribe to TF and render the current Wombat position from the
+   `map -> husky1_base_link` transform.
+5. Subscribe to `/husky1/target_weed_marker` and distinguish the currently
+   selected weed from the other tracked weeds.
+6. Use the marker frame IDs and TF data rather than assuming every incoming
+   point is already in `map`.
+7. Show stale, missing, and valid-empty data distinctly, including marker
+   freshness and TF availability.
+8. Preserve panel state such as selected topics, global frame, and display
+   settings with `context.saveState()`, but never persist movement commands or
+   an enabled manual override.
+
+The existing `/husky1/target_weed` `PointStamped` should be shown as
+frame-aware diagnostic data, but the target marker's add/delete lifecycle is
+the authoritative visual indication that a target is currently selected.
+The existing depth-point, LaserScan, and annotated detection-camera panels
+remain standard panels; this custom panel only adds region, XY weed, Wombat,
+target, and override controls.
+
+#### Scope boundaries
+
+Do not present search lanes, `search_goal_index_`, mission completion,
+navigation success, robot health, or emergency-stop state as definitive GUI
+state until corresponding ROS publishers/contracts exist. Search lanes and the
+current search-goal index remain private to `MissionNode`; add a dedicated
+publisher before visualising them.
+
+Phase 3 implementation and verification should cover:
+
+- manual override disabled, enabled, and disabled again;
+- rejected or failed override requests;
+- immediate zero output when override is disabled or times out;
+- autonomous navigation being blocked while manual override is active;
+- region selection and later `/region` observation;
+- live weed estimates appearing and expiring in the XY view;
+- Wombat pose following TF;
+- selected-target marker appearance and deletion;
+- stale/missing TF and marker data;
+- reconnects not republishing a region, velocity, or override command.
 
 ### Phase 4: Wombat operator commands
 
-Do not implement direct movement controls from the current source. First add
-an explicit Wombat command interface with:
+Phase 3 provides only the manual-override gate around the existing teleop
+operation. Do not add autonomous movement controls or new direct movement
+semantics from Foxglove. Any future direct command interface must first define:
 
 - bounded command type;
 - dead-man/hold-to-run semantics;
