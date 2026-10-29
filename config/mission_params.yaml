@@ -2,6 +2,7 @@ mission_node:
   ros__parameters:
     # Startup settings for weed estimation and display. Navigation stays on
     # the existing search goals until weed approach behaviour is implemented.
+    search_lane_spacing: 3.0
     weed:
       confidence_threshold: 0.6
       max_time_difference: 0.1         # Image/cloud timestamp difference, seconds.

@@ -43,6 +43,10 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 	try {
 		auto response = future.get();
 		mission_request_in_flight_ = false;
+		if (response->mission_complete) {
+			schedule_retry(false);
+			return;
+		}
 
 		if (!response->success) {
 			schedule_retry(false);
@@ -56,7 +60,7 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 		const double repeated_goal_distance = std::hypot(
 			response->goal.pose.position.x - last_goal_.pose.position.x,
 			response->goal.pose.position.y - last_goal_.pose.position.y);
-		if (last_goal_valid_ && repeated_goal_distance < 0.1) {
+		if (!response->is_turn && last_goal_valid_ && repeated_goal_distance < 0.1) {
 			RCLCPP_WARN(
 				get_logger(),
 				"Waypoint (%.2f, %.2f) repeated without progress; skipping it",
@@ -112,6 +116,7 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 	if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
 		RCLCPP_INFO(get_logger(), "Nav2 reached the goal");
 		//SERVICE CALL TO REMOVE WEED
+		schedule_retry(false);
 		return;
 	}
 

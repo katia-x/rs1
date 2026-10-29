@@ -166,7 +166,7 @@ local_costmap:
       inflation_layer:
         plugin: nav2_costmap_2d::InflationLayer
         cost_scaling_factor: 3.0
-        inflation_radius: 0.25
+        inflation_radius: 0.5
       obstacle_layer:
         plugin: nav2_costmap_2d::ObstacleLayer
         enabled: true
@@ -312,7 +312,7 @@ waypoint_follower:
     wait_at_waypoint:
       plugin: nav2_waypoint_follower::WaitAtWaypoint
       enabled: true
-      waypoint_pause_duration: 200
+      waypoint_pause_duration: 0
 velocity_smoother:
   ros__parameters:
     use_sim_time: true

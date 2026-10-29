@@ -16,12 +16,11 @@ MissionNode::MissionNode()
 {
 	global_frame_ = declare_parameter("global_frame", "map");
 	wombat_base_frame_ = declare_parameter("wombat_base_frame", "husky1_base_link");
-	const double camera_width_of_view = declare_parameter("camera_width_of_view", 2.5);
-	search_lane_spacing_ = camera_width_of_view * 0.5;
+	search_lane_spacing_ = declare_parameter("search_lane_spacing", search_lane_spacing_);
 	search_goal_distance_ = declare_parameter("search_goal_distance", search_goal_distance_);
 	location_tolerance_ = declare_parameter("location_tolerance", location_tolerance_);
 	if (!std::isfinite(search_lane_spacing_) || search_lane_spacing_ <= 0.0) {
-		throw std::invalid_argument("camera_width_of_view must be positive and finite");
+		throw std::invalid_argument("search_lane_spacing must be positive and finite");
 	}
 	const auto detections_topic = declare_parameter<std::string>(
 		"detections_topic", "/husky1/detections");
@@ -122,6 +121,12 @@ void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr
 	}
 	region_vertices_ = message->poses;
 	build_search_lines();
+	mission_complete_ = false;
+	consecutive_goal_failures_ = 0;
+	last_goal_valid_ = false;
+	last_goal_was_weed_ = false;
+	last_segment_heading_valid_ = false;
+	turn_pending_ = false;
 	clear_weed_target();
 	RCLCPP_INFO(get_logger(), "Region updated with %zu vertices", region_vertices_.size());
 }
@@ -322,6 +327,9 @@ void MissionNode::serve_next_goal(
 	response->goal.header.frame_id = global_frame_;
 	response->goal.pose.orientation.w = 1.0;
 	response->weed_id = 0; //null
+	response->is_turn = false;
+	response->mission_complete = mission_complete_;
+	if (mission_complete_) { return; }
 
 	geometry_msgs::msg::PoseStamped robot_pose;
 	if (!current_pose(robot_pose)) {
@@ -345,15 +353,16 @@ void MissionNode::serve_next_goal(
 	}
 	const double lookahead = std::max(0.0, search_goal_distance_);
 	const bool skipping_lane_endpoint = request->skip_current_goal && last_goal_valid_ &&
-		!last_goal_was_weed_ && search_goal_index_ != 0 &&
-		search_goal_index_ % 2 == 1 &&
+		search_goal_index_ != 0 && search_goal_index_ % 2 == 1 &&
 		distance(last_goal_position_, search_lines_[search_goal_index_].pose.position) < location_tolerance_;
 	const bool extend_failed_goal = request->skip_current_goal && last_goal_valid_ &&
-		!skipping_lane_endpoint;
+		search_goal_index_ != 0 && !skipping_lane_endpoint;
 	if (skipping_lane_endpoint) {
 		search_goal_index_++;
 		if (search_goal_index_ >= search_lines_.size()) {
-			search_goal_index_ = 0;
+			mission_complete_ = true;
+			response->mission_complete = true;
+			return;
 		}
 		RCLCPP_WARN(get_logger(), "Skipped failed lane endpoint and advanced to the next search segment");
 	}
@@ -363,7 +372,9 @@ void MissionNode::serve_next_goal(
 	if (search_goal_index_ != 0 && distance(search_lines_[search_goal_index_].pose.position, robot_pose.pose.position) < location_tolerance_) {
 		search_goal_index_++;
 		if (search_goal_index_ >= search_lines_.size()) {
-			search_goal_index_ = 0;
+			mission_complete_ = true;
+			response->mission_complete = true;
+			return;
 		}
 	}
 
@@ -381,9 +392,36 @@ void MissionNode::serve_next_goal(
 		last_goal_position_ = response->goal.pose.position;
 		last_goal_valid_ = true;
 		last_goal_was_weed_ = false;
+		last_segment_heading_ = heading;
+		last_segment_heading_valid_ = true;
 		search_goal_index_++;
 		return;
 	}
+
+	const auto & lane_start = search_lines_[search_goal_index_ - 1].pose.position;
+	const auto & lane_end = search_lines_[search_goal_index_].pose.position;
+	const double lane_heading = std::atan2(
+		lane_end.y - lane_start.y, lane_end.x - lane_start.x);
+	const double heading_delta = std::atan2(
+		std::sin(lane_heading - last_segment_heading_),
+		std::cos(lane_heading - last_segment_heading_));
+	const bool lane_direction_changed = !last_segment_heading_valid_ ||
+		std::abs(heading_delta) > 0.1;
+	const bool turn_goal = turn_pending_ ? request->skip_current_goal : lane_direction_changed;
+	if (turn_goal) {
+		response->goal.pose.position = robot_pose.pose.position;
+		response->goal.pose.orientation.z = std::sin(lane_heading * 0.5);
+		response->goal.pose.orientation.w = std::cos(lane_heading * 0.5);
+		response->is_turn = true;
+		last_goal_position_ = response->goal.pose.position;
+		last_goal_valid_ = true;
+		last_goal_was_weed_ = false;
+		last_segment_heading_ = lane_heading;
+		last_segment_heading_valid_ = true;
+		turn_pending_ = true;
+		return;
+	}
+	turn_pending_ = false;
 
 	if (!request->skip_current_goal && selected_weed_ &&
 		distance(robot_pose.pose.position, selected_weed_->position) < search_goal_distance_) {
@@ -399,10 +437,15 @@ void MissionNode::serve_next_goal(
 			if (lane_length > 1e-6) {
 				const double extra = 0.5 * lookahead *
 					static_cast<double>(consecutive_goal_failures_);
-				response->goal.pose.position.x = last_goal_position_.x +
-					(extra / lane_length) * (lane_end.x - lane_start.x);
-				response->goal.pose.position.y = last_goal_position_.y +
-					(extra / lane_length) * (lane_end.y - lane_start.y);
+				const double ux = (lane_end.x - lane_start.x) / lane_length;
+				const double uy = (lane_end.y - lane_start.y) / lane_length;
+				const double failed_progress =
+					(last_goal_position_.x - lane_start.x) * ux +
+					(last_goal_position_.y - lane_start.y) * uy;
+				const double retry_progress = std::clamp(
+					failed_progress + extra, 0.0, lane_length);
+				response->goal.pose.position.x = lane_start.x + retry_progress * ux;
+				response->goal.pose.position.y = lane_start.y + retry_progress * uy;
 			}
 		} else {
 			const double goal_lookahead = lookahead * (1.0 +
@@ -418,8 +461,6 @@ void MissionNode::serve_next_goal(
 			}
 		}
 	}
-	const auto & lane_start = search_lines_[search_goal_index_ - 1].pose.position;
-	const auto & lane_end = search_lines_[search_goal_index_].pose.position;
 	const double heading = std::atan2(
 		lane_end.y - lane_start.y, lane_end.x - lane_start.x);
 	response->goal.pose.orientation.z = std::sin(heading * 0.5);

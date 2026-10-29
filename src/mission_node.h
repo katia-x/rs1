@@ -39,8 +39,8 @@ private:
 
 	std::string global_frame_;
 	std::string wombat_base_frame_;
-	double search_lane_spacing_{1.25};
-	double search_goal_distance_{2.5};
+	double search_lane_spacing_{1.5};
+	double search_goal_distance_{2.0};
 	bool search_line_assignment_alternation{false};
 	std::size_t search_goal_index_{0};
 	std::vector<geometry_msgs::msg::Pose> region_vertices_;
@@ -64,6 +64,10 @@ private:
 	geometry_msgs::msg::Point last_goal_position_;
 	bool last_goal_valid_{false};
 	bool last_goal_was_weed_{false};
+	double last_segment_heading_{0.0};
+	bool last_segment_heading_valid_{false};
+	bool turn_pending_{false};
+	bool mission_complete_{false};
 	bool target_visible_{false};
 };
 
