@@ -60,6 +60,10 @@ private:
 	std::unique_ptr<MissionProcessing> mission_processing_;
 	std::optional<MissionProcessing::WeedEstimate> selected_weed_;
 	std::optional<std::uint64_t> selected_weed_id_;
+	std::size_t consecutive_goal_failures_{0};
+	geometry_msgs::msg::Point last_goal_position_;
+	bool last_goal_valid_{false};
+	bool last_goal_was_weed_{false};
 	bool target_visible_{false};
 };
 
