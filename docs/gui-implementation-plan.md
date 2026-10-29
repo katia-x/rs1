@@ -254,9 +254,10 @@ provides a top-down XY view in the configured global frame, normally `map`.
 The panel must:
 
 1. Subscribe to `/region` and render the latest region polygon.
-2. Allow the operator to select or edit region vertices in the map view and
-   publish exactly one validated `geometry_msgs/msg/PoseArray` after
-   confirmation.
+2. Allow the operator to select two opposite corners in the map view and
+   publish exactly one validated, axis-aligned rectangular
+   `geometry_msgs/msg/PoseArray` after confirmation. A third click starts a
+   new rectangle.
 3. Subscribe to `/husky1/weed_estimate_markers` and render all active tracked
    weed locations as XY points, ignoring the initial `DELETEALL` marker when
    calculating the displayed estimate set.

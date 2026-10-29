@@ -1,5 +1,6 @@
 import { MessageEvent, PanelExtensionContext } from "@foxglove/extension";
 import { ReactElement, useLayoutEffect, useState } from "react";
+import type { MouseEvent } from "react";
 import { createRoot } from "react-dom/client";
 
 import "./styles.css";
@@ -26,7 +27,6 @@ const MARKER_ADD = 0;
 const MARKER_DELETE = 2;
 const MARKER_DELETEALL = 3;
 const POSE_ARRAY_SCHEMA = "geometry_msgs/msg/PoseArray";
-const MARKER_ARRAY_SCHEMA = "visualization_msgs/msg/MarkerArray";
 const BOOL_SCHEMA = "std_msgs/msg/Bool";
 
 function finitePoint(point: unknown): point is Point {
@@ -39,50 +39,35 @@ function regionPoints(message: unknown): Point[] {
   return poses.flatMap((pose) => (finitePoint(pose.position) ? [pose.position] : []));
 }
 
-function polygonArea(points: Point[]): number {
-  return points.reduce((area, point, index) => {
-    const next = points[(index + 1) % points.length]!;
-    return area + point.x * next.y - next.x * point.y;
-  }, 0) / 2;
-}
-
-function orientation(a: Point, b: Point, c: Point): number {
-  return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-}
-
-function selfIntersects(points: Point[]): boolean {
-  for (let index = 0; index < points.length; index += 1) {
-    const next = (index + 1) % points.length;
-    for (let other = index + 1; other < points.length; other += 1) {
-      const otherNext = (other + 1) % points.length;
-      if (index === otherNext || next === other) {
-        continue;
-      }
-      const abC = orientation(points[index]!, points[next]!, points[other]!);
-      const abD = orientation(points[index]!, points[next]!, points[otherNext]!);
-      const cdA = orientation(points[other]!, points[otherNext]!, points[index]!);
-      const cdB = orientation(points[other]!, points[otherNext]!, points[next]!);
-      if (abC * abD < 0 && cdA * cdB < 0) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function project(point: Point): { left: string; top: string } {
+function project(point: Point): { x: number; y: number } {
   return {
-    left: `${((point.x + 10) / 20) * 100}%`,
-    top: `${((10 - point.y) / 20) * 100}%`,
+    x: ((point.x + 10) / 20) * 100,
+    y: ((10 - point.y) / 20) * 100,
   };
 }
 
-function unproject(event: React.MouseEvent<SVGSVGElement>): Point {
+function unproject(event: MouseEvent<SVGSVGElement>): Point | undefined {
   const bounds = event.currentTarget.getBoundingClientRect();
+  if (bounds.width <= 0 || bounds.height <= 0) {
+    return undefined;
+  }
   return {
     x: ((event.clientX - bounds.left) / bounds.width) * 20 - 10,
     y: (1 - (event.clientY - bounds.top) / bounds.height) * 20 - 10,
   };
+}
+
+function rectangleFromCorners(corners: Point[]): Point[] {
+  if (corners.length !== 2) {
+    return corners;
+  }
+  const [first, second] = corners;
+  return [
+    { x: first.x, y: first.y },
+    { x: second.x, y: first.y },
+    { x: second.x, y: second.y },
+    { x: first.x, y: second.y },
+  ];
 }
 
 function OperatorPanel({ context }: { context: PanelExtensionContext }): ReactElement {
@@ -203,12 +188,13 @@ function OperatorPanel({ context }: { context: PanelExtensionContext }): ReactEl
     });
 
   const publishRegion = () => {
-    if (draftRegion.length < 3) {
-      setError("Select at least three region vertices.");
+    if (draftRegion.length !== 2) {
+      setError("Select two opposite corners for the rectangular region.");
       return;
     }
-    if (Math.abs(polygonArea(draftRegion)) < 1e-6 || selfIntersects(draftRegion)) {
-      setError("Region vertices must form a non-crossing polygon with non-zero area.");
+    const rectangle = rectangleFromCorners(draftRegion);
+    if (rectangle[0]!.x === rectangle[2]!.x || rectangle[0]!.y === rectangle[2]!.y) {
+      setError("The two corners must form a non-zero rectangle.");
       return;
     }
     try {
@@ -218,7 +204,7 @@ function OperatorPanel({ context }: { context: PanelExtensionContext }): ReactEl
       context.advertise(regionTopic, POSE_ARRAY_SCHEMA);
       context.publish(regionTopic, {
         header: { frame_id: globalFrame, stamp: { sec: 0, nanosec: 0 } },
-        poses: draftRegion.map((point) => ({
+        poses: rectangle.map((point) => ({
           position: { x: point.x, y: point.y, z: 0 },
           orientation: { x: 0, y: 0, z: 0, w: 1 },
         })),
@@ -247,6 +233,7 @@ function OperatorPanel({ context }: { context: PanelExtensionContext }): ReactEl
   return (
     <div className="operator-panel">
       <h2>Wombat operator map</h2>
+      <div className="operator-help">Click two opposite corners to define a rectangular region.</div>
       <div className="operator-settings">
         <label>Global frame<input value={globalFrame} onChange={(event) => setGlobalFrame(event.target.value)} onBlur={saveState} /></label>
         <label>Region topic<input value={regionTopic} onChange={(event) => setRegionTopic(event.target.value)} onBlur={saveState} /></label>
@@ -266,15 +253,31 @@ function OperatorPanel({ context }: { context: PanelExtensionContext }): ReactEl
       <svg
         className="operator-map"
         viewBox="0 0 100 100"
-        onClick={(event) => setDraftRegion((points) => [...points, unproject(event)])}
+        onClick={(event) => {
+          const point = unproject(event);
+          if (!point) {
+            return;
+          }
+          setError(undefined);
+          setDraftRegion((corners) => corners.length >= 2 ? [point] : [...corners, point]);
+        }}
         role="application"
         aria-label="Wombat top-down map"
       >
-        {region.length > 2 && <polygon className="region-overlay" points={region.map((point) => `${project(point).left.replace("%", "")},${project(point).top.replace("%", "")}`).join(" ")} />}
-        {draftRegion.length > 1 && <polyline className="draft-region" points={draftRegion.map((point) => `${project(point).left.replace("%", "")},${project(point).top.replace("%", "")}`).join(" ")} />}
-        {weeds.map((point, index) => <circle className="weed-point" key={`weed-${index}`} cx={`${((point.x + 10) / 20) * 100}`} cy={`${((10 - point.y) / 20) * 100}`} r="1.3" />)}
-        {target && <circle className="target-point" cx={`${((target.x + 10) / 20) * 100}`} cy={`${((10 - target.y) / 20) * 100}`} r="2" />}
-        {wombat && <rect className="wombat-point" x={`${((wombat.x + 10) / 20) * 100 - 1.5}`} y={`${((10 - wombat.y) / 20) * 100 - 1.5}`} width="3" height="3" />}
+        {region.length > 2 && <polygon className="region-overlay" points={region.map((point) => {
+          const projected = project(point);
+          return `${projected.x},${projected.y}`;
+        }).join(" ")} />}
+        {draftRegion.length > 0 && <polygon className="draft-region" points={rectangleFromCorners(draftRegion).map((point) => {
+          const projected = project(point);
+          return `${projected.x},${projected.y}`;
+        }).join(" ")} />}
+        {weeds.map((point, index) => {
+          const projected = project(point);
+          return <circle className="weed-point" key={`weed-${index}`} cx={projected.x} cy={projected.y} r="1.3" />;
+        })}
+        {target && <circle className="target-point" cx={project(target).x} cy={project(target).y} r="2" />}
+        {wombat && <rect className="wombat-point" x={project(wombat).x - 1.5} y={project(wombat).y - 1.5} width="3" height="3" />}
       </svg>
       <div className="operator-actions">
         <button type="button" onClick={() => setDraftRegion([])}>Clear draft</button>
@@ -283,7 +286,7 @@ function OperatorPanel({ context }: { context: PanelExtensionContext }): ReactEl
       {error && <div className="error">{error}</div>}
       <div className="operator-diagnostics">
         <span>Region: {region.length} vertices</span>
-        <span>Draft: {draftRegion.length} vertices</span>
+        <span>Draft: {draftRegion.length === 2 ? "rectangle ready" : `${draftRegion.length}/2 corners`}</span>
         <span>Weeds: {weeds.length}</span>
         <span>Target: {target ? "visible" : "none"}</span>
         <span>Wombat TF: {wombat ? "available" : "missing"} ({age(lastTfTime)})</span>

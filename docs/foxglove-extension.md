@@ -78,6 +78,10 @@ The extension provides two panels:
   tracked weed markers, Wombat TF position, selected-target marker, and manual
   override request.
 
+The operator map defines a region with exactly two clicks for opposite
+corners. The panel expands those corners into a four-vertex axis-aligned
+rectangle before publishing `/region`; a third click starts a new rectangle.
+
 The operator panel observes `/husky1/manual_override`,
 `/husky1/weed_estimate_markers`, `/husky1/target_weed_marker`, and
 `/husky1/tf`. Its override button publishes a single `std_msgs/msg/Bool`
