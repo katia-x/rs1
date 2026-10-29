@@ -1,0 +1,35 @@
+{
+  "name": "rs1-region-selection",
+  "displayName": "RS1 Region Selection",
+  "description": "Select and publish validated search regions for the RS1 mission node.",
+  "publisher": "katia-x",
+  "version": "0.1.0",
+  "license": "UNLICENSED",
+  "main": "./dist/extension.js",
+  "keywords": [
+    "foxglove",
+    "ros",
+    "rs1"
+  ],
+  "scripts": {
+    "build": "foxglove-extension build",
+    "foxglove:prepublish": "foxglove-extension build --mode production",
+    "lint": "eslint .",
+    "local-install": "foxglove-extension install",
+    "package": "foxglove-extension package"
+  },
+  "devDependencies": {
+    "@foxglove/eslint-plugin": "^2",
+    "@foxglove/extension": "^2",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "create-foxglove-extension": "^1",
+    "css-loader": "^7",
+    "eslint": "^9",
+    "prettier": "^3",
+    "react": "^18",
+    "react-dom": "^18",
+    "style-loader": "^4",
+    "typescript": "^5"
+  }
+}

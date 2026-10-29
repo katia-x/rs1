@@ -26,15 +26,21 @@ The source now provides a concrete mission and perception path:
    `vision_msgs/msg/Detection2DArray`.
 7. Mission processing correlates detections with
    `/husky1/camera/depth/points`, transforms high-confidence weeds into the
-   `map` frame, and de-duplicates stored weed coordinates.
-8. Mission processing also consumes `/husky1/scan` and contains the
+   `map` frame, maintains smoothed, time-limited weed tracks, and
+   de-duplicates observations by association distance.
+8. `mission_node` publishes the tracked weed estimates as a
+   `visualization_msgs/msg/MarkerArray` and publishes the currently selected
+   target as both `geometry_msgs/msg/PointStamped` and a
+   `visualization_msgs/msg/Marker`.
+9. Mission processing also consumes `/husky1/scan` and contains the
    bounding-box-to-velocity helper, but there is no GUI-facing velocity
    subscriber or velocity command publisher wired into the current Wombat
    node.
 
-The GUI must not claim that stored weed coordinates, navigation state, or
-robot health are observable until those values are published on ROS topics or
-services.
+The GUI can now display tracked and selected weed positions. It still must not
+claim that navigation state, mission completion, robot health, or command
+acknowledgement are observable until those values are published on ROS topics
+or actions.
 
 ## Current ROS contract
 
@@ -48,6 +54,9 @@ services.
 | `/husky1/camera/image` | camera -> detector | `sensor_msgs/msg/Image` | Plant detector subscription default | Optional raw camera panel when published |
 | `/husky1/camera/depth/points` | camera -> mission | `sensor_msgs/msg/PointCloud2` | Mission processing subscription | 3D/depth panel and freshness display |
 | `/husky1/scan` | lidar -> mission/GUI | `sensor_msgs/msg/LaserScan` | Mission processing subscription | LaserScan/3D panel |
+| `/husky1/target_weed` | mission -> GUI/consumers | `geometry_msgs/msg/PointStamped` | `MissionNode` publisher | Show the currently selected weed target |
+| `/husky1/target_weed_marker` | mission -> GUI/consumers | `visualization_msgs/msg/Marker` | `MissionNode` publisher | Show or clear the selected target in 3D |
+| `/husky1/weed_estimate_markers` | mission -> GUI/consumers | `visualization_msgs/msg/MarkerArray` | `MissionNode` publisher | Show the current tracked weed estimates |
 | `/tf` and `/tf_static` | transform system -> consumers | TF messages | Mission and robot system | 3D frame and robot transform display |
 
 Topic names for the detector are parameters and can be changed:
@@ -68,12 +77,13 @@ than supported by the current source:
 - `/glider/trajectory_goals`
 - `/plant_detection/weeds`
 - `/poo`
-- mission status, Wombat/Glider health, emergency-stop state, and command
-  acknowledgement topics
+- mission status, Wombat/Glider health, emergency-stop state, command
+  acknowledgement, and navigation-result topics intended for the GUI
 
-The existing Glider and sensing files are placeholders. The mission node keeps
-transformed weed points internally; it does not publish them. Therefore a
-Foxglove panel cannot yet display a live global weed marker list.
+The existing Glider and sensing files are placeholders. The mission node does
+publish visualization markers for weed estimates, but it does not publish a
+typed weed-detection array, persistent weed database, or mission-status
+message.
 
 ## Recommended Foxglove layout
 
@@ -84,9 +94,11 @@ Display:
 - Foxglove connection state.
 - Last message time and age for `/region`, `/husky1/detections`,
   `/husky1/detections/image`, `/husky1/camera/depth/points`, and
-  `/husky1/scan`.
+  `/husky1/scan`, `/husky1/weed_estimate_markers`, and
+  `/husky1/target_weed`.
 - Active frames from message headers.
 - Detector topic names and data availability.
+- Marker freshness and the number of currently rendered weed estimates.
 
 Do not display mission completion, emergency state, or robot health as fact
 until explicit status messages are added.
@@ -98,6 +110,9 @@ until explicit status messages are added.
 - Raw Message or Table panel for `/husky1/detections`.
 - Detection summary showing total detections, weed count, plant count, and
   confidence values.
+- A separate summary for mission-qualified weeds. These are detections that
+  have passed the mission confidence threshold, depth/ROI validation,
+  timestamp matching, TF transformation, and track association.
 
 The detector uses the configured confidence threshold for inference. Mission
 weed mapping applies an additional confidence threshold of `0.75`, so the GUI
@@ -110,11 +125,15 @@ Use a standard Foxglove 3D panel for:
 - TF and robot frames.
 - `/husky1/camera/depth/points`.
 - `/husky1/scan`.
-- The `/region` PoseArray, if the panel supports displaying it directly or a
-  small visualization topic is added.
+- The `/region` PoseArray, if the panel supports displaying it directly.
+- `/husky1/weed_estimate_markers` for all active tracked weed estimates.
+- `/husky1/target_weed_marker` for the currently selected target.
+- `/husky1/target_weed` in a Raw Message or point overlay panel.
 
-The GUI can show the region and sensor evidence now, but it cannot show the
-mission's internal `stored_weed_coordinates_` without a new publisher.
+The estimate marker topic is a complete snapshot: the node sends a
+`DELETEALL` marker followed by the current tracks. It is also transient-local,
+so a late Foxglove subscriber can reconstruct the latest snapshot. Tracks
+expire after the configured `weed.track_timeout`.
 
 ### Mission and navigation view
 
@@ -123,7 +142,9 @@ Use Raw Message/Table panels for:
 - The last `/region` message.
 - Region frame and vertex count.
 - Configured mission parameters such as `global_frame`,
-  `search_goal_distance`, `camera_width_of_view`, and `location_tolerance`.
+  `search_goal_distance`, `camera_width_of_view`, `location_tolerance`, and
+  the read-only `weed.*` estimation parameters.
+- Active weed target, target timestamp, and target marker visibility.
 - Nav2 action feedback/result if exposed by the running bridge and tooling.
 
 The `wombat_next_goal` service response contains a `PoseStamped`, `success`,
@@ -144,6 +165,9 @@ ros2 topic type /husky1/detections
 ros2 topic type /husky1/detections/image
 ros2 topic type /husky1/camera/depth/points
 ros2 topic type /husky1/scan
+ros2 topic type /husky1/target_weed
+ros2 topic type /husky1/target_weed_marker
+ros2 topic type /husky1/weed_estimate_markers
 ros2 service type /wombat_next_goal
 ros2 action list
 ros2 action info /husky1/navigate_to_pose
@@ -163,6 +187,8 @@ Create a standard-panel layout containing:
 - PointCloud2/3D panel.
 - TF and robot-frame view.
 - Region Raw Message/Table panel.
+- Weed estimate MarkerArray panel.
+- Selected weed target Marker/PointStamped panels.
 - Topic freshness and connection diagnostics.
 
 This phase is implementable against the current source without adding ROS
@@ -187,18 +213,20 @@ There is no region acknowledgement topic. The panel should confirm only that
 the message was published and that a later `/region` observation is visible;
 it must not report mission acceptance as a separate state.
 
-### Phase 3: Publish mission observability
+### Phase 3: Add current mission visualisation
 
-Add ROS publishers before implementing a richer mission panel:
+The current source already supports the first part of mission observability.
+Configure Foxglove to display:
 
-- Active region or region acknowledgement.
-- Search-line/waypoint visualization as `PoseArray`, `Path`, or markers.
-- Stored global weed coordinates as a frame-aware message or visualization
-  marker array.
-- Current goal and goal index.
-- Mission and Nav2 status.
+- `/husky1/weed_estimate_markers` as the active global weed estimate set.
+- `/husky1/target_weed_marker` as the selected target.
+- `/husky1/target_weed` as the selected target's frame-aware point.
+- TF between `map`, `husky1_base_link`, and the sensor frames.
 
-These additions would enable map-level mission progress and weed displays.
+Search lanes and the current search-goal index remain internal to
+`MissionNode`. Add a publisher for those values before presenting them as
+mission progress in the GUI. Likewise, add a mission-status or navigation
+status topic before showing a definitive task state.
 
 ### Phase 4: Wombat operator commands
 
@@ -259,7 +287,7 @@ the `/region` PoseArray. Do not persist active movement commands.
 
 ### Tests blocked on future interfaces
 
-- Live global weed markers.
+- Search-lane and current-goal visualization.
 - Mission search progress and current-goal display.
 - Wombat command acknowledgement.
 - Emergency-stop state.
