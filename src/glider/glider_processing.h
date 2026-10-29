@@ -51,8 +51,8 @@ public:
   GliderProcessing(
     const Pose & home,
     double safe_height = 15.0,
-    double pickup_height = 1.5,
-    double align_height = 4.0,
+    double pickup_height = 0.5,
+    double align_height = 1.5,
     double xy_tolerance = 0.4,
     double z_tolerance = 0.15);
 

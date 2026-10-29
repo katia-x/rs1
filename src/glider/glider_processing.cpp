@@ -321,6 +321,8 @@ void GliderProcessing::handleAlign()
   } else {
     command_.vz = 0.0;
   }
+
+  
   
 
   status_msg_ = detected_poo_valid_
@@ -328,7 +330,7 @@ void GliderProcessing::handleAlign()
     : "ALIGN: hovering (waiting for sonar)";
 
   // Once XY is good, go to final descent
-  if (xyClose(current_pose_, xy_target)) {
+  if (detected_poo_valid_ && xyClose(current_pose_, xy_target)) {
     command_.vx = 0.0;
     command_.vy = 0.0;
     transition(State::FINAL_DESCEND);

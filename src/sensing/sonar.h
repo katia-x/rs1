@@ -37,7 +37,13 @@ private:
   void handleGetCubeCentre(
     const std::shared_ptr<rs1::srv::GetCubeCentre::Request> request,
     std::shared_ptr<rs1::srv::GetCubeCentre::Response> response);
-
+  
+  bool use_goal_gate_{false};
+  double goal_x_{0.0};
+  double goal_y_{0.0};
+  double goal_xy_radius_{1.0};
+  double closest_fraction_{0.25};
+  int min_points_{20};
   // Latest odometry
   bool have_odom_{false};
   double drone_x_{0.0};

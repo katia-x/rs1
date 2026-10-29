@@ -23,8 +23,8 @@ GliderNode::GliderNode()
   this->declare_parameter("home_z", 1.5);
 
   this->declare_parameter("safe_height", 15.0);
-  this->declare_parameter("pickup_height", 1.5);
-  this->declare_parameter("align_height", 4.0);
+  this->declare_parameter("pickup_height", 0.5);
+  this->declare_parameter("align_height", 1.5);
 
   this->declare_parameter("xy_tolerance", 0.4);
   this->declare_parameter("z_tolerance", 0.15);

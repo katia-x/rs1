@@ -20,6 +20,15 @@ SonarNode::SonarNode()
   this->declare_parameter("min_range", 0.15);
   this->declare_parameter("max_range", 20.0);
   this->declare_parameter("range_publish_rate", 20.0);
+  // Optional: only use points near a known poo/cube goal
+  this->declare_parameter("use_goal_gate", false);
+  this->declare_parameter("goal_x", 0.0);
+  this->declare_parameter("goal_y", 0.0);
+  this->declare_parameter("goal_xy_radius", 1.0);
+
+  // Prefer closest fraction of points (cube top vs ground)
+  this->declare_parameter("closest_fraction", 0.25);  // keep closest 25%
+  this->declare_parameter("min_points", 20);
 
   cloud_topic_          = this->get_parameter("cloud_topic").as_string();
   odom_topic_           = this->get_parameter("odom_topic").as_string();
@@ -28,6 +37,12 @@ SonarNode::SonarNode()
   max_range_            = this->get_parameter("max_range").as_double();
   range_publish_rate_   = this->get_parameter("range_publish_rate").as_double();
 
+  use_goal_gate_   = this->get_parameter("use_goal_gate").as_bool();
+  goal_x_          = this->get_parameter("goal_x").as_double();
+  goal_y_          = this->get_parameter("goal_y").as_double();
+  goal_xy_radius_  = this->get_parameter("goal_xy_radius").as_double();
+  closest_fraction_= this->get_parameter("closest_fraction").as_double();
+  min_points_      = this->get_parameter("min_points").as_int();
   // ------------------------------------------------------------------
   // Subscribers
   // ------------------------------------------------------------------
@@ -88,9 +103,12 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
     return;
   }
 
-  // Collect ranges and world-frame positions of points under the drone
-  std::vector<double> ranges;
-  std::vector<double> xs, ys, zs;
+  struct Sample {
+    double range;
+    double wx, wy, wz;
+  };
+  std::vector<Sample> samples;
+  samples.reserve(2000);
 
   try {
     sensor_msgs::PointCloud2ConstIterator<float> iter_x(*msg, "x");
@@ -98,78 +116,106 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
     sensor_msgs::PointCloud2ConstIterator<float> iter_z(*msg, "z");
 
     for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z) {
-      const float x = *iter_x;   // camera / optical frame
-      const float y = *iter_y;
-      const float z = *iter_z;
+      const double x = static_cast<double>(*iter_x);  // optical frame
+      const double y = static_cast<double>(*iter_y);
+      const double z = static_cast<double>(*iter_z);
 
-      // Skip invalid points
       if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
         continue;
       }
 
-      // Depth cameras usually have +Z forward. For a downward camera
-      // the "range" is roughly the Z value (or the 3D distance).
-      // We treat z as the distance along the optical axis.
-      const double range = static_cast<double>(z);
-      if (range < min_range_ || range > max_range_) {
+      // Downward camera: z ≈ range to surface
+      if (z < min_range_ || z > max_range_) {
         continue;
       }
 
-      // Only keep points that are roughly under the drone
-      // (small lateral offset in the camera frame)
-      const double lateral = std::hypot(static_cast<double>(x), static_cast<double>(y));
+      // Near nadir only
+      const double lateral = std::hypot(x, y);
       if (lateral > max_lateral_distance_) {
         continue;
       }
 
-      ranges.push_back(range);
+      // Approximate world position (nadir camera near drone centre)
+      const double wx = drone_x_ + x;
+      const double wy = drone_y_ + y;
+      const double wz = drone_z_ - z;
 
-      // Approximate world position of the point:
-      // assume the camera is looking straight down and is close to the drone centre.
-      // (Good enough for a first version; can be improved with TF later.)
-      xs.push_back(drone_x_ + static_cast<double>(x));
-      ys.push_back(drone_y_ + static_cast<double>(y));
-      zs.push_back(drone_z_ - range);
+      // Optional: only near known cube/poo goal
+      if (use_goal_gate_) {
+        const double d_goal = std::hypot(wx - goal_x_, wy - goal_y_);
+        if (d_goal > goal_xy_radius_) {
+          continue;
+        }
+      }
+
+      samples.push_back({z, wx, wy, wz});
     }
   } catch (const std::exception & e) {
-    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+    RCLCPP_WARN_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
       "PointCloud iteration failed: %s", e.what());
     return;
   }
 
-  if (ranges.empty()) {
-    have_valid_measurement_ = false;
+  if (static_cast<int>(samples.size()) < min_points_) {
+    // Keep last good measurement; do not clear
+    RCLCPP_DEBUG_THROTTLE(
+      this->get_logger(), *this->get_clock(), 2000,
+      "Only %zu points after filters (need %d)",
+      samples.size(), min_points_);
     return;
   }
 
-  // Median range (more robust than mean)
-  std::sort(ranges.begin(), ranges.end());
-  const size_t mid = ranges.size() / 2;
-  last_range_ = (ranges.size() % 2 == 0)
-    ? 0.5 * (ranges[mid - 1] + ranges[mid])
-    : ranges[mid];
+  // Sort by range (closest first). Cube top is closer than surrounding ground.
+  std::sort(samples.begin(), samples.end(),
+    [](const Sample & a, const Sample & b) {
+      return a.range < b.range;
+    });
 
-  // Mean centre
+  const size_t n_keep = std::max<size_t>(
+    1, static_cast<size_t>(samples.size() * closest_fraction_));
+
+  // Median range of closest band
+  std::vector<double> close_ranges;
+  close_ranges.reserve(n_keep);
   double sum_x = 0.0, sum_y = 0.0, sum_z = 0.0;
-  for (size_t i = 0; i < xs.size(); ++i) {
-    sum_x += xs[i];
-    sum_y += ys[i];
-    sum_z += zs[i];
+  for (size_t i = 0; i < n_keep; ++i) {
+    close_ranges.push_back(samples[i].range);
+    sum_x += samples[i].wx;
+    sum_y += samples[i].wy;
+    sum_z += samples[i].wz;
   }
-  centre_x_ = sum_x / static_cast<double>(xs.size());
-  centre_y_ = sum_y / static_cast<double>(ys.size());
-  centre_z_ = sum_z / static_cast<double>(zs.size());
+
+  std::sort(close_ranges.begin(), close_ranges.end());
+  const size_t mid = close_ranges.size() / 2;
+  last_range_ = (close_ranges.size() % 2 == 0)
+    ? 0.5 * (close_ranges[mid - 1] + close_ranges[mid])
+    : close_ranges[mid];
+
+  centre_x_ = sum_x / static_cast<double>(n_keep);
+  centre_y_ = sum_y / static_cast<double>(n_keep);
+  centre_z_ = sum_z / static_cast<double>(n_keep);
 
   have_valid_measurement_ = true;
+
+  RCLCPP_INFO_THROTTLE(
+    this->get_logger(), *this->get_clock(), 1000,
+    "Sonar: %zu pts, keep %zu closest, range=%.2f centre=(%.2f, %.2f, %.2f)",
+    samples.size(), n_keep, last_range_, centre_x_, centre_y_, centre_z_);
 }
 
 void SonarNode::handleGetCubeCentre(
   const std::shared_ptr<rs1::srv::GetCubeCentre::Request> /*request*/,
   std::shared_ptr<rs1::srv::GetCubeCentre::Response> response)
 {
-  if (!have_odom_ || !have_valid_measurement_) {
+  if (!have_odom_) {
     response->success = false;
-    response->message = "No valid odometry or depth measurement available";
+    response->message = "No odometry yet";
+    return;
+  }
+  if (!have_valid_measurement_) {
+    response->success = false;
+    response->message = "No valid depth points";
     return;
   }
 
