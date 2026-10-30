@@ -29,6 +29,7 @@ private:
 	void region_callback(const geometry_msgs::msg::PoseArray::SharedPtr message);
 	void update_weed_target();
 	void publish_weed_estimates(const rclcpp::Time & time);
+	void publish_selected_weed(const rclcpp::Time & time);
 	void clear_weed_target();
 	bool current_pose(geometry_msgs::msg::PoseStamped & pose);
 	void build_search_lines();

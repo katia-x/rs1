@@ -508,6 +508,7 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'global_frame': 'map',
             'navigation_action': '/husky1/navigate_to_pose',
+            'lane_start_wait_duration': 2.0,
         }],
         condition=_if_true('husky'),
     ))

@@ -146,6 +146,32 @@ void MissionNode::clear_weed_target()
 	target_visible_ = false;
 }
 
+void MissionNode::publish_selected_weed(const rclcpp::Time & time)
+{
+	if (!selected_weed_) { return; }
+	geometry_msgs::msg::PointStamped point;
+	point.header.frame_id = global_frame_;
+	point.header.stamp = selected_weed_->last_seen;
+	point.point = selected_weed_->position;
+	target_publisher_->publish(point);
+	visualization_msgs::msg::Marker marker;
+	marker.header.frame_id = global_frame_;
+	marker.header.stamp = time;
+	marker.ns = "target_weed";
+	marker.id = 0;
+	marker.type = visualization_msgs::msg::Marker::SPHERE;
+	marker.action = visualization_msgs::msg::Marker::ADD;
+	marker.pose.position = selected_weed_->position;
+	marker.pose.orientation.w = 1.0;
+	marker.scale.x = marker.scale.y = marker.scale.z = 0.2;
+	marker.color.r = 1.0f; marker.color.g = 0.8f; marker.color.a = 1.0f;
+	marker.lifetime = rclcpp::Duration::from_seconds(std::max(0.01,
+		mission_processing_->config().track_timeout -
+		(time - selected_weed_->last_seen).seconds()));
+	target_marker_publisher_->publish(marker);
+	target_visible_ = true;
+}
+
 void MissionNode::update_weed_target()
 {
 	const auto time = now();
@@ -183,6 +209,18 @@ void MissionNode::update_weed_target()
 		permanent_weeds.poses.push_back(pose);
 	}
 	permanent_weed_publisher_->publish(permanent_weeds);
+	if (selected_weed_id_) {
+		const auto current = std::find_if(mission_processing_->estimates().begin(),
+			mission_processing_->estimates().end(), [&](const auto & estimate) {
+				return estimate.id == *selected_weed_id_;
+			});
+		if (current != mission_processing_->estimates().end()) {
+			selected_weed_ = *current;
+			publish_selected_weed(time);
+			return;
+		}
+		clear_weed_target();
+	}
 	// Odd endpoints are active search lanes. Even endpoints are connectors
 	// between lanes; no weed is selected during those transitions.
 	if (search_goal_index_ == 0 || search_goal_index_ >= search_lines_.size() || search_goal_index_ % 2 == 0) {
@@ -199,26 +237,7 @@ void MissionNode::update_weed_target()
 	if (!target) { clear_weed_target(); return; }
 	selected_weed_ = target;
 	selected_weed_id_ = target->id;
-	geometry_msgs::msg::PointStamped point;
-	point.header.frame_id = global_frame_;
-	point.header.stamp = target->last_seen;
-	point.point = target->position;
-	target_publisher_->publish(point);
-	visualization_msgs::msg::Marker marker;
-	marker.header.frame_id = global_frame_;
-	marker.header.stamp = time;
-	marker.ns = "target_weed";
-	marker.id = 0;  // Replaces the previous target rather than leaving ghost markers.
-	marker.type = visualization_msgs::msg::Marker::SPHERE;
-	marker.action = visualization_msgs::msg::Marker::ADD;
-	marker.pose.position = target->position;
-	marker.pose.orientation.w = 1.0;
-	marker.scale.x = marker.scale.y = marker.scale.z = 0.2;
-	marker.color.r = 1.0f; marker.color.g = 0.8f; marker.color.a = 1.0f;
-	marker.lifetime = rclcpp::Duration::from_seconds(std::max(0.01,
-		mission_processing_->config().track_timeout - (time - target->last_seen).seconds()));
-	target_marker_publisher_->publish(marker);
-	target_visible_ = true;
+	publish_selected_weed(time);
 }
 
 void MissionNode::publish_weed_estimates(const rclcpp::Time & time)
@@ -328,8 +347,13 @@ void MissionNode::serve_next_goal(
 	response->goal.pose.orientation.w = 1.0;
 	response->weed_id = 0; //null
 	response->is_turn = false;
+	response->is_lane_start = false;
 	response->mission_complete = mission_complete_;
 	if (mission_complete_) { return; }
+	if (request->weed_handled && selected_weed_id_ &&
+		*selected_weed_id_ == request->handled_weed_id) {
+		clear_weed_target();
+	}
 
 	geometry_msgs::msg::PoseStamped robot_pose;
 	if (!current_pose(robot_pose)) {
@@ -348,7 +372,7 @@ void MissionNode::serve_next_goal(
 		RCLCPP_WARN(get_logger(),
 			"Skipping failed waypoint (failure %zu) and extending the next goal along the current lane",
 			consecutive_goal_failures_);
-	} else {
+	} else if (!request->reassess_current_goal) {
 		consecutive_goal_failures_ = 0;
 	}
 	const double lookahead = std::max(0.0, search_goal_distance_);
@@ -389,6 +413,7 @@ void MissionNode::serve_next_goal(
 			lane_end.y - lane_start.y, lane_end.x - lane_start.x);
 		response->goal.pose.orientation.z = std::sin(heading * 0.5);
 		response->goal.pose.orientation.w = std::cos(heading * 0.5);
+		response->is_lane_start = true;
 		last_goal_position_ = response->goal.pose.position;
 		last_goal_valid_ = true;
 		last_goal_was_weed_ = false;

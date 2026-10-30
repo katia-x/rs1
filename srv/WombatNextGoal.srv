@@ -1,4 +1,7 @@
 bool skip_current_goal
+bool reassess_current_goal
+bool weed_handled
+uint64 handled_weed_id
 ---
 geometry_msgs/PoseStamped goal
 bool is_weed
@@ -6,3 +9,4 @@ uint64 weed_id
 bool success
 bool mission_complete
 bool is_turn
+bool is_lane_start
