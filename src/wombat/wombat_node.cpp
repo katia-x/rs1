@@ -123,6 +123,7 @@ void WombatNode::handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::S
 		mission_request_reassessment_ = false;
 		if (!retry_request && !reassessment_request) { goal_failures_ = 0; }
 		if (response->mission_complete) {
+			RCLCPP_INFO(get_logger(), "Mission complete: no further navigation goals remain");
 			state_ = State::Complete;
 			return;
 		}

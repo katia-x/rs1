@@ -384,6 +384,14 @@ void MissionNode::serve_next_goal(
 	}
 	if (request->reassess_current_goal && selected_weed_) {
 		response->goal.pose.position = selected_weed_->position;
+		if (search_goal_index_ != 0 && search_goal_index_ < search_lines_.size()) {
+			const auto & lane_start = search_lines_[search_goal_index_ - 1].pose.position;
+			const auto & lane_end = search_lines_[search_goal_index_].pose.position;
+			const double lane_heading = std::atan2(
+				lane_end.y - lane_start.y, lane_end.x - lane_start.x);
+			response->goal.pose.orientation.z = std::sin(lane_heading * 0.5);
+			response->goal.pose.orientation.w = std::cos(lane_heading * 0.5);
+		}
 		response->is_weed = true;
 		response->weed_id = selected_weed_->id;
 		last_goal_.pose = response->goal.pose;
@@ -404,8 +412,23 @@ void MissionNode::serve_next_goal(
 	}
 
 	if (!request->skip_current_goal) {
+		if (recovery_mode_ == RecoveryMode::Retreat) {
+			++search_goal_index_;
+			if (search_goal_index_ >= search_lines_.size()) {
+				mission_complete_ = true;
+				response->mission_complete = true;
+				RCLCPP_INFO(get_logger(), "Mission complete: all search lanes have been processed");
+				return;
+			}
+			recovery_progress_ = 0.0;
+		}
 		recovery_mode_ = RecoveryMode::None;
 	}
+	const auto skip_recovery_lane = [&]() {
+		search_goal_index_ += recovery_mode_ == RecoveryMode::LaneStart ? 2 : 1;
+		recovery_mode_ = RecoveryMode::None;
+		recovery_progress_ = 0.0;
+	};
 	bool emit_recovery_goal = false;
 	bool skipped_lane_transition = false;
 	if (request->skip_current_goal) {
@@ -429,19 +452,9 @@ void MissionNode::serve_next_goal(
 			if (next_progress > robot_progress + 1.0 + 1e-6) {
 				recovery_progress_ = next_progress;
 			} else {
-				recovery_mode_ = RecoveryMode::Endpoint;
-				recovery_progress_ = lane_length;
+				skip_recovery_lane();
 			}
 			emit_recovery_goal = true;
-		} else if (recovery_mode_ == RecoveryMode::Endpoint) {
-			++search_goal_index_;
-			recovery_mode_ = RecoveryMode::None;
-			recovery_progress_ = 0.0;
-			if (search_goal_index_ >= search_lines_.size()) {
-				mission_complete_ = true;
-				response->mission_complete = true;
-				return;
-			}
 		} else if (last_goal_was_lane_start_) {
 			recovery_mode_ = RecoveryMode::LaneStart;
 			recovery_lane_end_index_ = search_goal_index_;
@@ -479,15 +492,21 @@ void MissionNode::serve_next_goal(
 		const auto & lane_start = search_lines_[recovery_lane_end_index_ - 1].pose.position;
 		const auto & lane_end = search_lines_[recovery_lane_end_index_].pose.position;
 		const double lane_length = distance(lane_start, lane_end);
-		if (recovery_mode_ == RecoveryMode::Endpoint ||
-			recovery_progress_ < lane_length - 1e-6) {
-			const double ux = (lane_end.x - lane_start.x) / lane_length;
-			const double uy = (lane_end.y - lane_start.y) / lane_length;
+		const double ux = (lane_end.x - lane_start.x) / lane_length;
+		const double uy = (lane_end.y - lane_start.y) / lane_length;
+		const double robot_progress =
+			(robot_pose.pose.position.x - lane_start.x) * ux +
+			(robot_pose.pose.position.y - lane_start.y) * uy;
+		while (recovery_mode_ == RecoveryMode::LaneStart &&
+			recovery_progress_ < lane_length - 1e-6 &&
+			recovery_progress_ <= robot_progress + 1.0 + 1e-6) {
+			recovery_progress_ += 1.0;
+		}
+		if (recovery_progress_ < lane_length - 1e-6 &&
+			recovery_progress_ > robot_progress + 1.0 + 1e-6) {
 			const double heading = std::atan2(lane_end.y - lane_start.y, lane_end.x - lane_start.x);
-			const double progress = recovery_mode_ == RecoveryMode::Endpoint
-				? lane_length : recovery_progress_;
-			response->goal.pose.position.x = lane_start.x + progress * ux;
-			response->goal.pose.position.y = lane_start.y + progress * uy;
+			response->goal.pose.position.x = lane_start.x + recovery_progress_ * ux;
+			response->goal.pose.position.y = lane_start.y + recovery_progress_ * uy;
 			response->goal.pose.orientation.z = std::sin(heading * 0.5);
 			response->goal.pose.orientation.w = std::cos(heading * 0.5);
 			response->is_lane_start = recovery_mode_ == RecoveryMode::LaneStart;
@@ -499,16 +518,11 @@ void MissionNode::serve_next_goal(
 			return;
 		}
 
-		if (recovery_mode_ == RecoveryMode::LaneStart) {
-			search_goal_index_ = recovery_lane_end_index_ + 2;
-		} else {
-			++search_goal_index_;
-		}
-		recovery_mode_ = RecoveryMode::None;
-		recovery_progress_ = 0.0;
+		skip_recovery_lane();
 		if (search_goal_index_ >= search_lines_.size()) {
 			mission_complete_ = true;
 			response->mission_complete = true;
+			RCLCPP_INFO(get_logger(), "Mission complete: all search lanes have been processed");
 			return;
 		}
 		RCLCPP_WARN(get_logger(), "Recovery reached the lane end; advancing to the next lane");
@@ -522,6 +536,7 @@ void MissionNode::serve_next_goal(
 		if (search_goal_index_ >= search_lines_.size()) {
 			mission_complete_ = true;
 			response->mission_complete = true;
+			RCLCPP_INFO(get_logger(), "Mission complete: all search lanes have been processed");
 			return;
 		}
 	}

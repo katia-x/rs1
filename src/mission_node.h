@@ -27,7 +27,7 @@ public:
 	MissionNode();
 
 private:
-	enum class RecoveryMode { None, Retreat, Endpoint, LaneStart };
+	enum class RecoveryMode { None, Retreat, LaneStart };
 
 	void region_callback(const geometry_msgs::msg::PoseArray::SharedPtr message);
 	void update_weed_target();
