@@ -41,11 +41,12 @@ amcl:
 bt_navigator:
   ros__parameters:
     use_sim_time: true
+    default_nav_to_pose_bt_xml: "$(find-pkg-share rs1)/behavior_trees/navigate_to_pose_goal_updates_only.xml"
     global_frame: map
     robot_base_frame: husky1_base_link
     odom_topic: odom
-    bt_loop_duration: 10
-    default_server_timeout: 20
+    bt_loop_duration: 50
+    default_server_timeout: 500
     wait_for_service_timeout: 1000
     plugin_lib_names:
     - nav2_compute_path_to_pose_action_bt_node
@@ -104,7 +105,7 @@ bt_navigator_navigate_to_pose_rclcpp_node:
 controller_server:
   ros__parameters:
     use_sim_time: true
-    controller_frequency: 5.0
+    controller_frequency: 2.5
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
@@ -125,7 +126,7 @@ controller_server:
       yaw_goal_tolerance: 0.15
     FollowPath:
       plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
-      desired_linear_vel: 0.5
+      desired_linear_vel: 1.0
       lookahead_dist: 0.6
       min_lookahead_dist: 0.3
       max_lookahead_dist: 0.9
@@ -142,7 +143,7 @@ controller_server:
       cost_scaling_gain: 1.0
       inflation_cost_scaling_factor: 3.0
       rotate_to_heading_angular_vel: 1.2
-      rotate_to_heading_min_angle: 0.3
+      rotate_to_heading_min_angle: 0.75
       allow_reversing: false
 local_costmap:
   local_costmap:

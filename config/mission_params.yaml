@@ -1,7 +1,6 @@
 mission_node:
   ros__parameters:
-    # Startup settings for weed estimation and display. Navigation stays on
-    # the existing search goals until weed approach behaviour is implemented.
+    # Startup settings for weed estimation and search navigation.
     search_lane_spacing: 3.0
     weed:
       confidence_threshold: 0.6
@@ -14,3 +13,9 @@ mission_node:
       association_distance: 0.5       # Maximum 3D tracking match distance, metres.
       smoothing_factor: 0.5          # Weight given to the latest observation.
       track_timeout: 3.0              # Expire since last depth observation, seconds.
+
+wombat_node:
+  ros__parameters:
+    lane_start_wait_duration: 2.0     # Pause after reaching a lane start or turn, seconds.
+    reassessment_frequency: 1.0       # Rolling search-goal updates per second.
+    max_goal_retries: 3               # Retries before a navigation goal is skipped.

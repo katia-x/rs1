@@ -105,7 +105,7 @@ install(TARGETS weed_override_layer
 )
 pluginlib_export_plugin_description_file(nav2_costmap_2d weed_layer_plugin.xml)
 
-install(DIRECTORY launch config worlds urdf_husky urdf_parrot
+install(DIRECTORY behavior_trees launch config worlds urdf_husky urdf_parrot
   DESTINATION share/${PROJECT_NAME}
   PATTERN "__pycache__" EXCLUDE
   PATTERN "*.pyc" EXCLUDE

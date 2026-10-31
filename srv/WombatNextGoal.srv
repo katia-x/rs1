@@ -1,7 +1,10 @@
 bool skip_current_goal
+bool retry_current_goal
 bool reassess_current_goal
 bool weed_handled
 uint64 handled_weed_id
+bool weed_unreachable
+uint64 unreachable_weed_id
 ---
 geometry_msgs/PoseStamped goal
 bool is_weed

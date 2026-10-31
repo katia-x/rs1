@@ -18,6 +18,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 class MissionNode : public rclcpp::Node
@@ -26,6 +27,8 @@ public:
 	MissionNode();
 
 private:
+	enum class RecoveryMode { None, Retreat, Endpoint, LaneStart };
+
 	void region_callback(const geometry_msgs::msg::PoseArray::SharedPtr message);
 	void update_weed_target();
 	void publish_weed_estimates(const rclcpp::Time & time);
@@ -41,7 +44,6 @@ private:
 	std::string global_frame_;
 	std::string wombat_base_frame_;
 	double search_lane_spacing_{1.5};
-	double search_goal_distance_{2.0};
 	bool search_line_assignment_alternation{false};
 	std::size_t search_goal_index_{0};
 	std::vector<geometry_msgs::msg::Pose> region_vertices_;
@@ -61,13 +63,19 @@ private:
 	std::unique_ptr<MissionProcessing> mission_processing_;
 	std::optional<MissionProcessing::WeedEstimate> selected_weed_;
 	std::optional<std::uint64_t> selected_weed_id_;
-	std::size_t consecutive_goal_failures_{0};
-	geometry_msgs::msg::Point last_goal_position_;
+	std::unordered_set<std::uint64_t> unreachable_weed_ids_;
+	geometry_msgs::msg::PoseStamped last_goal_;
 	bool last_goal_valid_{false};
 	bool last_goal_was_weed_{false};
+	std::uint64_t last_goal_weed_id_{0};
+	bool last_goal_was_turn_{false};
+	bool last_goal_was_lane_start_{false};
 	double last_segment_heading_{0.0};
 	bool last_segment_heading_valid_{false};
 	bool turn_pending_{false};
+	RecoveryMode recovery_mode_{RecoveryMode::None};
+	std::size_t recovery_lane_end_index_{0};
+	double recovery_progress_{0.0};
 	bool mission_complete_{false};
 	bool target_visible_{false};
 };

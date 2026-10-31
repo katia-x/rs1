@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <geometry_msgs/msg/point.hpp>
@@ -77,7 +78,8 @@ public:
     std::optional<WeedEstimate> select_target(
         const geometry_msgs::msg::Point & robot, const SearchLane & lane,
         const std::vector<geometry_msgs::msg::Pose> & region,
-        std::optional<std::uint64_t> preferred_id = std::nullopt) const;
+        std::optional<std::uint64_t> preferred_id = std::nullopt,
+        const std::unordered_set<std::uint64_t> & excluded_ids = {}) const;
 
     // Legacy stateless image/lidar approach calculation; not used for navigation.
     static geometry_msgs::msg::Twist pinpointPlant(

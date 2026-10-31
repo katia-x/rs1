@@ -334,7 +334,8 @@ void MissionProcessing::remember_permanent_weed(const WeedEstimate & estimate)
 
 std::optional<MissionProcessing::WeedEstimate> MissionProcessing::select_target(
     const geometry_msgs::msg::Point & robot, const SearchLane & lane,
-    const std::vector<geometry_msgs::msg::Pose> & region, std::optional<std::uint64_t> preferred_id) const
+    const std::vector<geometry_msgs::msg::Pose> & region, std::optional<std::uint64_t> preferred_id,
+    const std::unordered_set<std::uint64_t> & excluded_ids) const
 {
     if (!finite_point(robot) || !finite_point(lane.start) || !finite_point(lane.end) ||
         !std::isfinite(lane.half_width) || lane.half_width <= 0.0) { return std::nullopt; }
@@ -346,6 +347,7 @@ std::optional<MissionProcessing::WeedEstimate> MissionProcessing::select_target(
     const WeedEstimate * selected = nullptr;
     double best_distance = std::numeric_limits<double>::infinity();
     for (const auto & track : estimates_) {
+        if (excluded_ids.find(track.id) != excluded_ids.end()) { continue; }
         const auto x = track.position.x - lane.start.x, y = track.position.y - lane.start.y;
         const auto along = x * ux + y * uy;
         const auto across = std::abs(x * uy - y * ux);

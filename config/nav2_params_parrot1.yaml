@@ -41,6 +41,7 @@ amcl:
 bt_navigator:
   ros__parameters:
     use_sim_time: true
+    default_nav_to_pose_bt_xml: "$(find-pkg-share rs1)/behavior_trees/navigate_to_pose_goal_updates_only.xml"
     global_frame: parrot1_map
     robot_base_frame: parrot1_base_link
     odom_topic: odom

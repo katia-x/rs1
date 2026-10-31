@@ -1,7 +1,6 @@
 #include "mission_node.h"
 
 #include <algorithm>
-#include <chrono>
 #include <cmath>
 #include <functional>
 #include <optional>
@@ -17,7 +16,6 @@ MissionNode::MissionNode()
 	global_frame_ = declare_parameter("global_frame", "map");
 	wombat_base_frame_ = declare_parameter("wombat_base_frame", "husky1_base_link");
 	search_lane_spacing_ = declare_parameter("search_lane_spacing", search_lane_spacing_);
-	search_goal_distance_ = declare_parameter("search_goal_distance", search_goal_distance_);
 	location_tolerance_ = declare_parameter("location_tolerance", location_tolerance_);
 	if (!std::isfinite(search_lane_spacing_) || search_lane_spacing_ <= 0.0) {
 		throw std::invalid_argument("search_lane_spacing must be positive and finite");
@@ -122,11 +120,15 @@ void MissionNode::region_callback(const geometry_msgs::msg::PoseArray::SharedPtr
 	region_vertices_ = message->poses;
 	build_search_lines();
 	mission_complete_ = false;
-	consecutive_goal_failures_ = 0;
 	last_goal_valid_ = false;
 	last_goal_was_weed_ = false;
+	last_goal_was_turn_ = false;
+	last_goal_was_lane_start_ = false;
+	unreachable_weed_ids_.clear();
 	last_segment_heading_valid_ = false;
 	turn_pending_ = false;
+	recovery_mode_ = RecoveryMode::None;
+	recovery_progress_ = 0.0;
 	clear_weed_target();
 	RCLCPP_INFO(get_logger(), "Region updated with %zu vertices", region_vertices_.size());
 }
@@ -209,7 +211,7 @@ void MissionNode::update_weed_target()
 		permanent_weeds.poses.push_back(pose);
 	}
 	permanent_weed_publisher_->publish(permanent_weeds);
-	if (selected_weed_id_) {
+	if (selected_weed_id_ && unreachable_weed_ids_.find(*selected_weed_id_) == unreachable_weed_ids_.end()) {
 		const auto current = std::find_if(mission_processing_->estimates().begin(),
 			mission_processing_->estimates().end(), [&](const auto & estimate) {
 				return estimate.id == *selected_weed_id_;
@@ -233,7 +235,7 @@ void MissionNode::update_weed_target()
 		search_lines_[search_goal_index_].pose.position,
 		search_lane_spacing_ * 0.5};
 	const auto target = mission_processing_->select_target(
-		robot.pose.position, lane, region_vertices_, selected_weed_id_);
+		robot.pose.position, lane, region_vertices_, selected_weed_id_, unreachable_weed_ids_);
 	if (!target) { clear_weed_target(); return; }
 	selected_weed_ = target;
 	selected_weed_id_ = target->id;
@@ -350,6 +352,12 @@ void MissionNode::serve_next_goal(
 	response->is_lane_start = false;
 	response->mission_complete = mission_complete_;
 	if (mission_complete_) { return; }
+	if (request->weed_unreachable) {
+		unreachable_weed_ids_.insert(request->unreachable_weed_id);
+		if (selected_weed_id_ && *selected_weed_id_ == request->unreachable_weed_id) {
+			clear_weed_target();
+		}
+	}
 	if (request->weed_handled && selected_weed_id_ &&
 		*selected_weed_id_ == request->handled_weed_id) {
 		clear_weed_target();
@@ -366,34 +374,150 @@ void MissionNode::serve_next_goal(
 		response->success = false;
 		return;
 	}
-
-	if (request->skip_current_goal) {
-		++consecutive_goal_failures_;
-		RCLCPP_WARN(get_logger(),
-			"Skipping failed waypoint (failure %zu) and extending the next goal along the current lane",
-			consecutive_goal_failures_);
-	} else if (!request->reassess_current_goal) {
-		consecutive_goal_failures_ = 0;
+	if (request->retry_current_goal && last_goal_valid_) {
+		response->goal = last_goal_;
+		response->is_weed = last_goal_was_weed_;
+		response->weed_id = last_goal_was_weed_ ? last_goal_weed_id_ : 0;
+		response->is_turn = last_goal_was_turn_;
+		response->is_lane_start = last_goal_was_lane_start_;
+		return;
 	}
-	const double lookahead = std::max(0.0, search_goal_distance_);
-	const bool skipping_lane_endpoint = request->skip_current_goal && last_goal_valid_ &&
-		search_goal_index_ != 0 && search_goal_index_ % 2 == 1 &&
-		distance(last_goal_position_, search_lines_[search_goal_index_].pose.position) < location_tolerance_;
-	const bool extend_failed_goal = request->skip_current_goal && last_goal_valid_ &&
-		search_goal_index_ != 0 && !skipping_lane_endpoint;
-	if (skipping_lane_endpoint) {
-		search_goal_index_++;
+	if (request->reassess_current_goal && selected_weed_) {
+		response->goal.pose.position = selected_weed_->position;
+		response->is_weed = true;
+		response->weed_id = selected_weed_->id;
+		last_goal_.pose = response->goal.pose;
+		last_goal_valid_ = true;
+		last_goal_was_weed_ = true;
+		last_goal_weed_id_ = response->weed_id;
+		last_goal_was_turn_ = false;
+		last_goal_was_lane_start_ = false;
+		return;
+	}
+	if (request->reassess_current_goal && last_goal_valid_) {
+		response->goal = last_goal_;
+		response->is_weed = last_goal_was_weed_;
+		response->weed_id = last_goal_was_weed_ ? last_goal_weed_id_ : 0;
+		response->is_turn = last_goal_was_turn_;
+		response->is_lane_start = last_goal_was_lane_start_;
+		return;
+	}
+
+	if (!request->skip_current_goal) {
+		recovery_mode_ = RecoveryMode::None;
+	}
+	bool emit_recovery_goal = false;
+	bool skipped_lane_transition = false;
+	if (request->skip_current_goal) {
+		RCLCPP_WARN(get_logger(), "Skipping unreachable waypoint and advancing along the current lane");
+		if (last_goal_was_weed_) {
+			clear_weed_target();
+		} else if (recovery_mode_ == RecoveryMode::LaneStart) {
+			recovery_progress_ += 1.0;
+			emit_recovery_goal = true;
+			RCLCPP_WARN(get_logger(), "Advancing failed lane start by 1 metre");
+		} else if (recovery_mode_ == RecoveryMode::Retreat) {
+			const auto & lane_start = search_lines_[recovery_lane_end_index_ - 1].pose.position;
+			const auto & lane_end = search_lines_[recovery_lane_end_index_].pose.position;
+			const double lane_length = distance(lane_start, lane_end);
+			const double ux = (lane_end.x - lane_start.x) / lane_length;
+			const double uy = (lane_end.y - lane_start.y) / lane_length;
+			const double robot_progress =
+				(robot_pose.pose.position.x - lane_start.x) * ux +
+				(robot_pose.pose.position.y - lane_start.y) * uy;
+			const double next_progress = recovery_progress_ - 1.0;
+			if (next_progress > robot_progress + 1.0 + 1e-6) {
+				recovery_progress_ = next_progress;
+			} else {
+				recovery_mode_ = RecoveryMode::Endpoint;
+				recovery_progress_ = lane_length;
+			}
+			emit_recovery_goal = true;
+		} else if (recovery_mode_ == RecoveryMode::Endpoint) {
+			++search_goal_index_;
+			recovery_mode_ = RecoveryMode::None;
+			recovery_progress_ = 0.0;
+			if (search_goal_index_ >= search_lines_.size()) {
+				mission_complete_ = true;
+				response->mission_complete = true;
+				return;
+			}
+		} else if (last_goal_was_lane_start_) {
+			recovery_mode_ = RecoveryMode::LaneStart;
+			recovery_lane_end_index_ = search_goal_index_;
+			if (recovery_lane_end_index_ == 0) { recovery_lane_end_index_ = 1; }
+			recovery_progress_ = 1.0;
+			emit_recovery_goal = true;
+			turn_pending_ = false;
+			RCLCPP_WARN(get_logger(), "Starting lane-start recovery 1 metre into the lane");
+		} else if (!last_goal_was_turn_ && search_goal_index_ != 0) {
+			recovery_mode_ = RecoveryMode::Retreat;
+			recovery_lane_end_index_ = search_goal_index_;
+			const auto & lane_start = search_lines_[search_goal_index_ - 1].pose.position;
+			const auto & lane_end = search_lines_[search_goal_index_].pose.position;
+			const double lane_length = distance(lane_start, lane_end);
+			recovery_progress_ = std::max(0.0, lane_length - 1.0);
+			emit_recovery_goal = true;
+			turn_pending_ = false;
+			RCLCPP_WARN(get_logger(), "Starting lane recovery 1 metre before the failed goal");
+		} else if (last_goal_was_turn_) {
+			turn_pending_ = false;
+			skipped_lane_transition = true;
+			RCLCPP_WARN(get_logger(), "Skipping failed lane transition and continuing with the next lane goal");
+			if (search_goal_index_ + 1 < search_lines_.size()) {
+				++search_goal_index_;
+				const auto & next_lane_start = search_lines_[search_goal_index_ - 1].pose.position;
+				const auto & next_lane_end = search_lines_[search_goal_index_].pose.position;
+				last_segment_heading_ = std::atan2(
+					next_lane_end.y - next_lane_start.y,
+					next_lane_end.x - next_lane_start.x);
+				last_segment_heading_valid_ = true;
+			}
+		}
+	}
+	if (emit_recovery_goal && recovery_mode_ != RecoveryMode::None) {
+		const auto & lane_start = search_lines_[recovery_lane_end_index_ - 1].pose.position;
+		const auto & lane_end = search_lines_[recovery_lane_end_index_].pose.position;
+		const double lane_length = distance(lane_start, lane_end);
+		if (recovery_mode_ == RecoveryMode::Endpoint ||
+			recovery_progress_ < lane_length - 1e-6) {
+			const double ux = (lane_end.x - lane_start.x) / lane_length;
+			const double uy = (lane_end.y - lane_start.y) / lane_length;
+			const double heading = std::atan2(lane_end.y - lane_start.y, lane_end.x - lane_start.x);
+			const double progress = recovery_mode_ == RecoveryMode::Endpoint
+				? lane_length : recovery_progress_;
+			response->goal.pose.position.x = lane_start.x + progress * ux;
+			response->goal.pose.position.y = lane_start.y + progress * uy;
+			response->goal.pose.orientation.z = std::sin(heading * 0.5);
+			response->goal.pose.orientation.w = std::cos(heading * 0.5);
+			response->is_lane_start = recovery_mode_ == RecoveryMode::LaneStart;
+			last_goal_.pose = response->goal.pose;
+			last_goal_valid_ = true;
+			last_goal_was_weed_ = false;
+			last_goal_was_turn_ = false;
+			last_goal_was_lane_start_ = response->is_lane_start;
+			return;
+		}
+
+		if (recovery_mode_ == RecoveryMode::LaneStart) {
+			search_goal_index_ = recovery_lane_end_index_ + 2;
+		} else {
+			++search_goal_index_;
+		}
+		recovery_mode_ = RecoveryMode::None;
+		recovery_progress_ = 0.0;
 		if (search_goal_index_ >= search_lines_.size()) {
 			mission_complete_ = true;
 			response->mission_complete = true;
 			return;
 		}
-		RCLCPP_WARN(get_logger(), "Skipped failed lane endpoint and advanced to the next search segment");
+		RCLCPP_WARN(get_logger(), "Recovery reached the lane end; advancing to the next lane");
 	}
 
 	// Move to the next lane before generating another goal once the current
 	// lane endpoint has been reached.
-	if (search_goal_index_ != 0 && distance(search_lines_[search_goal_index_].pose.position, robot_pose.pose.position) < location_tolerance_) {
+	if (!request->skip_current_goal && search_goal_index_ != 0 &&
+		distance(search_lines_[search_goal_index_].pose.position, robot_pose.pose.position) < location_tolerance_) {
 		search_goal_index_++;
 		if (search_goal_index_ >= search_lines_.size()) {
 			mission_complete_ = true;
@@ -403,7 +527,7 @@ void MissionNode::serve_next_goal(
 	}
 
 	// Before starting the search, drive all the way to the first point of the
-	// first lane. Weeds and lookahead are ignored during this initial approach.
+	// first lane. Weed targets are ignored during this initial approach.
 	if (search_goal_index_ == 0) {
 		response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
 		response->goal.pose.position.y = search_lines_[search_goal_index_].pose.position.y;
@@ -414,9 +538,11 @@ void MissionNode::serve_next_goal(
 		response->goal.pose.orientation.z = std::sin(heading * 0.5);
 		response->goal.pose.orientation.w = std::cos(heading * 0.5);
 		response->is_lane_start = true;
-		last_goal_position_ = response->goal.pose.position;
+		last_goal_.pose = response->goal.pose;
 		last_goal_valid_ = true;
 		last_goal_was_weed_ = false;
+		last_goal_was_turn_ = false;
+		last_goal_was_lane_start_ = true;
 		last_segment_heading_ = heading;
 		last_segment_heading_valid_ = true;
 		search_goal_index_++;
@@ -438,9 +564,11 @@ void MissionNode::serve_next_goal(
 		response->goal.pose.orientation.z = std::sin(lane_heading * 0.5);
 		response->goal.pose.orientation.w = std::cos(lane_heading * 0.5);
 		response->is_turn = true;
-		last_goal_position_ = response->goal.pose.position;
+		last_goal_.pose = response->goal.pose;
 		last_goal_valid_ = true;
 		last_goal_was_weed_ = false;
+		last_goal_was_turn_ = true;
+		last_goal_was_lane_start_ = false;
 		last_segment_heading_ = lane_heading;
 		last_segment_heading_valid_ = true;
 		turn_pending_ = true;
@@ -448,51 +576,24 @@ void MissionNode::serve_next_goal(
 	}
 	turn_pending_ = false;
 
-	if (!request->skip_current_goal && selected_weed_ &&
-		distance(robot_pose.pose.position, selected_weed_->position) < search_goal_distance_) {
+	if (!request->skip_current_goal && selected_weed_) {
 		response->goal.pose.position = selected_weed_->position;
 		response->is_weed = true;
 		response->weed_id = selected_weed_->id;
 	} else {
-		response->goal.pose.position.x = search_lines_[search_goal_index_].pose.position.x;
-		if (extend_failed_goal) {
-			const auto & lane_start = search_lines_[search_goal_index_ - 1].pose.position;
-			const auto & lane_end = search_lines_[search_goal_index_].pose.position;
-			const double lane_length = distance(lane_start, lane_end);
-			if (lane_length > 1e-6) {
-				const double extra = 0.5 * lookahead *
-					static_cast<double>(consecutive_goal_failures_);
-				const double ux = (lane_end.x - lane_start.x) / lane_length;
-				const double uy = (lane_end.y - lane_start.y) / lane_length;
-				const double failed_progress =
-					(last_goal_position_.x - lane_start.x) * ux +
-					(last_goal_position_.y - lane_start.y) * uy;
-				const double retry_progress = std::clamp(
-					failed_progress + extra, 0.0, lane_length);
-				response->goal.pose.position.x = lane_start.x + retry_progress * ux;
-				response->goal.pose.position.y = lane_start.y + retry_progress * uy;
-			}
-		} else {
-			const double goal_lookahead = lookahead * (1.0 +
-				0.5 * static_cast<double>(consecutive_goal_failures_));
-			if (robot_pose.pose.position.y < search_lines_[search_goal_index_].pose.position.y) {
-				response->goal.pose.position.y = std::min(
-					robot_pose.pose.position.y + goal_lookahead,
-					search_lines_[search_goal_index_].pose.position.y);
-			} else {
-				response->goal.pose.position.y = std::max(
-					robot_pose.pose.position.y - goal_lookahead,
-					search_lines_[search_goal_index_].pose.position.y);
-			}
-		}
+		response->goal.pose.position = lane_end;
 	}
 	const double heading = std::atan2(
 		lane_end.y - lane_start.y, lane_end.x - lane_start.x);
 	response->goal.pose.orientation.z = std::sin(heading * 0.5);
 	response->goal.pose.orientation.w = std::cos(heading * 0.5);
-	last_goal_position_ = response->goal.pose.position;
+	last_goal_.pose = response->goal.pose;
 	last_goal_valid_ = true;
 	last_goal_was_weed_ = response->is_weed;
+	last_goal_weed_id_ = response->is_weed ? response->weed_id : 0;
+	last_goal_was_turn_ = false;
+	last_goal_was_lane_start_ = skipped_lane_transition;
+	response->is_lane_start = skipped_lane_transition;
 	return;
 }
 
