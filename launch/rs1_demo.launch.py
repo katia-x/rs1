@@ -12,7 +12,7 @@ from launch.actions import (
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution, PythonExpression
-from launch_ros.actions import Node
+from launch_ros.actions import Node, RosTimer
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
@@ -284,8 +284,8 @@ def generate_launch_description():
     ld.add_action(nav2_launch_arg)
 
     ld.add_action(DeclareLaunchArgument(
-        'mission_region_delay', default_value='30.0',
-        description='Seconds before publishing the mission search region'))
+        'mission_region_delay', default_value='20.0',
+        description='Simulation seconds before publishing the mission search region'))
 
     husky_launch_arg = DeclareLaunchArgument(
         'husky',
@@ -438,7 +438,7 @@ def generate_launch_description():
         use_sim_time=use_sim_time,
         robot_arg='husky',
         robot_namespace='husky1',
-        start_delay=7.0,
+        start_delay=15.0,
     )
 
     add_navigation_instance(
@@ -504,19 +504,21 @@ def generate_launch_description():
     ld.add_action(Node(
         package='rs1', executable='wombat_node', name='wombat_node',
         output='screen',
-        parameters=[{
+        parameters=[PathJoinSubstitution([config_path, 'mission_params.yaml']), {
             'use_sim_time': use_sim_time,
             'global_frame': 'map',
             'navigation_action': '/husky1/navigate_to_pose',
+            'navigation_behavior_tree': PathJoinSubstitution([
+                pkg_path, 'behavior_trees', 'navigate_to_pose_goal_updates_only.xml']),
         }],
         condition=_if_true('husky'),
     ))
 
-    ld.add_action(TimerAction(
+    ld.add_action(RosTimer(
         period=LaunchConfiguration('mission_region_delay'),
         actions=[ExecuteProcess(
             cmd=[
-                'ros2', 'topic', 'pub', '--rate', '1', '--times', '5',
+                'ros2', 'topic', 'pub', '--once',
                 '/region', 'geometry_msgs/msg/PoseArray', MISSION_REGION,
             ],
             output='screen',

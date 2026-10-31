@@ -6,6 +6,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 #include <geometry_msgs/msg/point.hpp>
@@ -72,11 +73,13 @@ public:
     CloudTiming cloud_timing() const;
 
     const std::vector<WeedEstimate> & estimates() const noexcept { return estimates_; }
+    const std::vector<WeedEstimate> & permanent_weeds() const noexcept { return permanent_weeds_; }
     const Config & config() const noexcept { return config_; }
     std::optional<WeedEstimate> select_target(
         const geometry_msgs::msg::Point & robot, const SearchLane & lane,
         const std::vector<geometry_msgs::msg::Pose> & region,
-        std::optional<std::uint64_t> preferred_id = std::nullopt) const;
+        std::optional<std::uint64_t> preferred_id = std::nullopt,
+        const std::unordered_set<std::uint64_t> & excluded_ids = {}) const;
 
     // Legacy stateless image/lidar approach calculation; not used for navigation.
     static geometry_msgs::msg::Twist pinpointPlant(
@@ -89,6 +92,7 @@ private:
         const sensor_msgs::msg::PointCloud2 & cloud) const;
     void associate(const std::vector<geometry_msgs::msg::Point> & observations,
         const rclcpp::Time & stamp);
+    void remember_permanent_weed(const WeedEstimate & estimate);
     void finish_batch();
     sensor_msgs::msg::PointCloud2::ConstSharedPtr nearest_cloud() const;
 
@@ -99,6 +103,7 @@ private:
     std::optional<rclcpp::Time> last_processed_stamp_;
     std::optional<rclcpp::Time> last_update_time_;
     std::vector<WeedEstimate> estimates_;
+    std::vector<WeedEstimate> permanent_weeds_;
     std::uint64_t next_id_{1};
 };
 

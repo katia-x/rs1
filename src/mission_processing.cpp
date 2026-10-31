@@ -309,15 +309,33 @@ void MissionProcessing::associate(const std::vector<geometry_msgs::msg::Point> &
         track.position.z += alpha * (point.z - track.position.z);
         track.last_seen = stamp;
         ++track.observation_count;
+        remember_permanent_weed(track);
     }
     for (std::size_t i = 0; i < observations.size(); ++i) {
-        if (!used_observations[i]) { estimates_.push_back({next_id_++, observations[i], stamp, 1}); }
+        if (!used_observations[i]) {
+            estimates_.push_back({next_id_++, observations[i], stamp, 1});
+            remember_permanent_weed(estimates_.back());
+        }
     }
+}
+
+void MissionProcessing::remember_permanent_weed(const WeedEstimate & estimate)
+{
+    const auto existing = std::find_if(permanent_weeds_.begin(), permanent_weeds_.end(),
+        [&](const auto & weed) { return weed.id == estimate.id; });
+    if (existing == permanent_weeds_.end()) {
+        permanent_weeds_.push_back(estimate);
+        return;
+    }
+    existing->position = estimate.position;
+    existing->last_seen = estimate.last_seen;
+    existing->observation_count = estimate.observation_count;
 }
 
 std::optional<MissionProcessing::WeedEstimate> MissionProcessing::select_target(
     const geometry_msgs::msg::Point & robot, const SearchLane & lane,
-    const std::vector<geometry_msgs::msg::Pose> & region, std::optional<std::uint64_t> preferred_id) const
+    const std::vector<geometry_msgs::msg::Pose> & region, std::optional<std::uint64_t> preferred_id,
+    const std::unordered_set<std::uint64_t> & excluded_ids) const
 {
     if (!finite_point(robot) || !finite_point(lane.start) || !finite_point(lane.end) ||
         !std::isfinite(lane.half_width) || lane.half_width <= 0.0) { return std::nullopt; }
@@ -329,6 +347,7 @@ std::optional<MissionProcessing::WeedEstimate> MissionProcessing::select_target(
     const WeedEstimate * selected = nullptr;
     double best_distance = std::numeric_limits<double>::infinity();
     for (const auto & track : estimates_) {
+        if (excluded_ids.find(track.id) != excluded_ids.end()) { continue; }
         const auto x = track.position.x - lane.start.x, y = track.position.y - lane.start.y;
         const auto along = x * ux + y * uy;
         const auto across = std::abs(x * uy - y * ux);
