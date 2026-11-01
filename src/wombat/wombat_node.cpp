@@ -142,6 +142,7 @@ void WombatNode::dispatch_pending_weed_goal()
 	state_ = State::Searching;
 	RCLCPP_INFO(get_logger(), "Sending weed goal %llu to Nav2",
 		static_cast<unsigned long long>(weed_goal.weed_id));
+	goal_failures_ = 0;
 	send_navigation_goal(weed_goal.goal, true, weed_goal.weed_id);
 }
 
