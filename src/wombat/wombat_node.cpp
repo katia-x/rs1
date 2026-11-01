@@ -33,7 +33,7 @@ WombatNode::WombatNode()
 void WombatNode::timer_callback()
 {
 	if (mission_request_in_flight_ || nav_goal_request_in_flight_ || nav_cancel_in_flight_) { return; }
-	if (pending_weed_goal_.pending) {
+	if (pending_weed_goal_.pending && state_ == State::Searching) {
 		if (canceling_goal_) { return; }
 		if (active_goal_) {
 			RCLCPP_INFO(get_logger(), "Canceling lane goal for weed %llu",
