@@ -219,10 +219,22 @@ void WombatNode::send_navigation_goal(
 	last_navigation_goal_ = goal.pose;
 	last_navigation_goal_valid_ = true;
 	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
-	options.goal_response_callback = std::bind(
-		&WombatNode::handle_nav_goal_response, this, std::placeholders::_1);
-	options.result_callback = std::bind(
-		&WombatNode::handle_nav_result, this, std::placeholders::_1);
+	const auto goal_generation = mission_generation_;
+	options.goal_response_callback =
+		[this, goal_generation](NavigateGoalHandle::SharedPtr goal_handle) {
+			if (goal_generation != mission_generation_ || state_ == State::Complete) {
+				nav_goal_request_in_flight_ = false;
+				if (goal_handle) { navigation_client_->async_cancel_goal(goal_handle); }
+				return;
+			}
+			handle_nav_goal_response(goal_handle);
+		};
+	options.result_callback =
+		[this, goal_generation](const NavigateGoalHandle::WrappedResult & result) {
+			if (goal_generation == mission_generation_ && state_ != State::Complete) {
+				handle_nav_result(result);
+			}
+		};
 	nav_goal_request_in_flight_ = true;
 	navigation_client_->async_send_goal(goal, options);
 }
