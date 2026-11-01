@@ -205,12 +205,6 @@ void WombatNode::reset_for_new_region()
 void WombatNode::send_navigation_goal(
 	const geometry_msgs::msg::PoseStamped & pose, bool is_weed, std::uint64_t weed_id)
 {
-	if (!navigation_client_->wait_for_action_server(2s)) {
-		RCLCPP_WARN(get_logger(), "Nav2 NavigateToPose action is not available yet");
-		state_ = State::Recovery;
-		handle_nav_failure();
-		return;
-	}
 	NavigateToPose::Goal goal;
 	goal.pose = pose;
 	goal.pose.header.frame_id = goal.pose.header.frame_id.empty() ? global_frame_ : goal.pose.header.frame_id;
@@ -219,6 +213,12 @@ void WombatNode::send_navigation_goal(
 	if (is_weed) { last_weed_id_ = weed_id; }
 	last_navigation_goal_ = goal.pose;
 	last_navigation_goal_valid_ = true;
+	if (!navigation_client_->wait_for_action_server(2s)) {
+		RCLCPP_WARN(get_logger(), "Nav2 NavigateToPose action is not available yet");
+		state_ = State::Recovery;
+		handle_nav_failure();
+		return;
+	}
 	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
 	const auto goal_generation = mission_generation_;
 	options.goal_response_callback =
