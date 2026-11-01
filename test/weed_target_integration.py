@@ -18,6 +18,7 @@ import rclpy
 from geometry_msgs.msg import PointStamped, Pose, PoseArray, TransformStamped
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from rosgraph_msgs.msg import Clock
+from rs1.msg import WombatStatus, WombatWeedGoal
 from rs1.srv import WombatNextGoal
 from sensor_msgs.msg import PointCloud2, PointField
 from tf2_msgs.msg import TFMessage
@@ -53,12 +54,15 @@ def main():
                 rclpy.init()
                 node = rclpy.create_node('weed_target_integration')
                 points, markers, late_markers = [], [], []
+                weed_goals, statuses = [], []
                 estimate_arrays, late_estimate_arrays = [], []
                 latched = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
                 point_sub = node.create_subscription(PointStamped, '/husky1/target_weed', points.append, 5)
                 marker_sub = node.create_subscription(Marker, '/husky1/target_weed_marker', markers.append, latched)
                 estimates_sub = node.create_subscription(
                     MarkerArray, '/husky1/weed_estimate_markers', estimate_arrays.append, latched)
+                node.create_subscription(WombatWeedGoal, '/wombat/weed_goal', weed_goals.append, 10)
+                node.create_subscription(WombatStatus, '/wombat/status', statuses.append, latched)
                 clock_pub = node.create_publisher(Clock, '/clock', 10)
                 tf_pub = node.create_publisher(TFMessage, '/husky1/tf_static', latched)
                 region_pub = node.create_publisher(PoseArray, '/region', 5)
@@ -123,6 +127,8 @@ def main():
                         pose = Pose(); pose.position.x = x; pose.position.y = y; pose.orientation.w = 1.
                         region.poses.append(pose)
                     region_pub.publish(region)
+                    wait_until(lambda: statuses and statuses[-1].region_reset and
+                               statuses[-1].mission_generation > 0)
                     # Let newer detections arrive while older depth is still in
                     # flight. A latest-only pending slot would lose the first
                     # detection and fail to publish when its cloud finally arrives.
@@ -150,6 +156,11 @@ def main():
                     assert response and response.success and not response.is_weed
                     assert response.goal.pose.position.x == 0 and response.goal.pose.position.y == 0
                     wait_until(lambda: points and any(m.action == Marker.ADD for m in markers))
+                    wait_until(lambda: weed_goals)
+                    assert weed_goals[-1].weed_id > 0 and weed_goals[-1].mission_generation == statuses[-1].mission_generation
+                    assert weed_goals[-1].goal.header.frame_id == 'map'
+                    assert abs(weed_goals[-1].goal.pose.orientation.z - math.sqrt(0.5)) < 1e-6
+                    assert abs(weed_goals[-1].goal.pose.orientation.w - math.sqrt(0.5)) < 1e-6
                     estimate = points[-1]
                     assert estimate.header.frame_id == 'map' and estimate.header.stamp.sec == 10
                     assert abs(estimate.point.x - 0.7) < 1e-6
@@ -191,12 +202,14 @@ def main():
                         'Late RViz subscriber would see expired estimates'
                     # The same configured width must also determine actual
                     # waypoint spacing, rather than just the target corridor.
-                    request = WombatNextGoal.Request(); request.skip_current_goal = True
+                    request = WombatNextGoal.Request()
+                    request.operation = WombatNextGoal.Request.SKIP_CURRENT_GOAL
                     future = client.call_async(request)
                     wait_until(future.done)
                     response = future.result()
                     assert response.success and not response.is_weed
-                    assert response.goal.pose.position.x == 1.5
+                    assert response.goal.pose.position.x == 0.0
+                    assert response.goal.pose.position.y == 3.0
                     print('PASS: real mission node publishes accurate map coordinates, updates the target, '
                           'derives corridor width from configured spacing, displays off-lane estimates, '
                           'keeps search goals, and clears expired markers for existing and late subscribers')

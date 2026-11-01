@@ -80,6 +80,21 @@ simulated camera origin. The camera is configured for 3 Hz in simulation time;
 wall-clock throughput depends on simulation performance. The demo runs plant
 inference and weed estimation, but does not start rosbag recording.
 
+## Autonomous goal flow
+
+Mission supplies one normal search goal at a time through `wombat_next_goal`.
+Wombat keeps the lane-end goal active while Nav2 follows it. When Mission
+selects a weed, it publishes a complete `rs1/msg/WombatWeedGoal` on
+`/wombat/weed_goal`; Wombat cancels the lane goal and sends the weed goal to
+Nav2. After the weed is handled or unreachable, Wombat reports the outcome
+through the service and Mission resumes the search plan.
+
+Mission publishes `rs1/msg/WombatStatus` on `/wombat/status`. A new region
+increments the mission generation and causes Wombat to cancel its current goal
+and request a fresh search goal. See [navigation architecture](navigation_architecture.md)
+for the ownership boundary between Mission, Wombat, and Nav2. Nav2's active
+behavior tree only computes and follows paths; it has no recovery nodes.
+
 ## World layout
 
 `worlds/rs1_world.sdf` includes `worlds/model.sdf`. The existing mesh URI

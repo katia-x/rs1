@@ -508,8 +508,6 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'global_frame': 'map',
             'navigation_action': '/husky1/navigate_to_pose',
-            'navigation_behavior_tree': PathJoinSubstitution([
-                pkg_path, 'behavior_trees', 'navigate_to_pose_goal_updates_only.xml']),
         }],
         condition=_if_true('husky'),
     ))

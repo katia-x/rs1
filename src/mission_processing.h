@@ -11,9 +11,7 @@
 
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose.hpp>
-#include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/laser_scan.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 #include <tf2_ros/buffer.h>
 #include <vision_msgs/msg/detection2_d_array.hpp>
@@ -80,11 +78,6 @@ public:
         const std::vector<geometry_msgs::msg::Pose> & region,
         std::optional<std::uint64_t> preferred_id = std::nullopt,
         const std::unordered_set<std::uint64_t> & excluded_ids = {}) const;
-
-    // Legacy stateless image/lidar approach calculation; not used for navigation.
-    static geometry_msgs::msg::Twist pinpointPlant(
-        float xmin, float ymin, float xmax, float ymax,
-        const sensor_msgs::msg::LaserScan & scan);
 
 private:
     std::optional<geometry_msgs::msg::Point> estimate_point(

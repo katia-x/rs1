@@ -56,8 +56,11 @@ pkill -KILL -f 'rviz2'
 Then in the Foxglove web GUI "https://app.foxglove.dev/uni-1511e5f5/p/prj_0edhFva64NKjaY73/view" run the "ws://localhost:8765" then edit the layout (top right option) and choose import. Select the most recent layout#.json from the docs folder.
 
 See [simulation setup](docs/simulation_setup.md) for dependencies, RViz,
-teleoperation, spawn settings and RGB-D topics. Mission scaffold code is not
-compiled or launched yet.
+teleoperation, spawn settings and RGB-D topics. Mission and Wombat are launched
+as part of the demo.
+
+See [navigation architecture](docs/navigation_architecture.md) for the current
+Mission, Wombat, and Nav2 ownership boundaries.
 
 ## Plant Detection
 The pipeline receives images from the Husky camera, converts them to OpenCV format, and runs RTMDet Tiny object detection.

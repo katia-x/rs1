@@ -21,6 +21,8 @@ find_package(visualization_msgs REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/WombatWeedGoal.msg"
+  "msg/WombatStatus.msg"
   "srv/WombatNextGoal.srv"
   DEPENDENCIES geometry_msgs
 )
@@ -68,7 +70,6 @@ ament_target_dependencies(
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(mission_processing_test
-    test/basic_tests.cpp
     test/weed_estimation_tests.cpp
     src/mission_processing.cpp
     SKIP_LINKING_MAIN_LIBRARIES

@@ -17,5 +17,4 @@ mission_node:
 wombat_node:
   ros__parameters:
     lane_start_wait_duration: 2.0     # Pause after reaching a lane start or turn, seconds.
-    reassessment_frequency: 1.0       # Rolling search-goal updates per second.
     max_goal_retries: 3               # Retries before a navigation goal is skipped.

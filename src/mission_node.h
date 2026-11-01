@@ -12,6 +12,8 @@
 
 #include "mission_processing.h"
 
+#include "rs1/msg/wombat_status.hpp"
+#include "rs1/msg/wombat_weed_goal.hpp"
 #include "rs1/srv/wombat_next_goal.hpp"
 
 #include <cstddef>
@@ -33,6 +35,8 @@ private:
 	void update_weed_target();
 	void publish_weed_estimates(const rclcpp::Time & time);
 	void publish_selected_weed(const rclcpp::Time & time);
+	void publish_weed_goal();
+	void publish_status(bool region_reset, bool mission_complete);
 	void clear_weed_target();
 	bool current_pose(geometry_msgs::msg::PoseStamped & pose);
 	void build_search_lines();
@@ -56,6 +60,8 @@ private:
 	rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_publisher_;
 	rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr estimate_markers_publisher_;
 	rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr permanent_weed_publisher_;
+	rclcpp::Publisher<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_publisher_;
+	rclcpp::Publisher<rs1::msg::WombatStatus>::SharedPtr status_publisher_;
 	rclcpp::TimerBase::SharedPtr weed_timer_;
 	rclcpp::Service<rs1::srv::WombatNextGoal>::SharedPtr next_goal_service_;
 	std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -78,6 +84,7 @@ private:
 	double recovery_progress_{0.0};
 	bool mission_complete_{false};
 	bool target_visible_{false};
+	std::uint64_t mission_generation_{0};
 };
 
 #endif
