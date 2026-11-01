@@ -285,7 +285,7 @@ void GliderProcessing::handleDescend()
     command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
     status_msg_ = "DESCEND: odometry fallback → align height";
   // Safety floor
-    if (current_pose_.z < 0.4 && command_.vz < 0.0) {
+    if (current_pose_.z < 0.4 /*&& command_.vz < 0.0*/) {
       command_.vz = 0.0;
     }
     if (std::abs(height_error) <= z_tolerance_) {

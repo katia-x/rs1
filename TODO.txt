@@ -1,4 +1,5 @@
-- Make a test launch file to test the glider flying over a few random cubes and finding the centre
-- Note: will need to figure out a way to fine centre of cube when cube is on an incline (very often in our world)
-- make a test to randomly generate poos around the map & pass position to glider (look into doing same for plant models & wombat)
-- Finish intergrating Sonar into glider for proper pickup
+- Make sure robot with no sonar works well, make robot move to poo and pick it up
+- make poo follow drone in simulation
+- make sure drone drops off poo on pickup truck
+- chat with kat about maybe doing teleop for alignment instead of using rgbd camera
+- potentially use lidar for pickup
