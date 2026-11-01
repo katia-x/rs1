@@ -12,7 +12,7 @@ from launch.actions import (
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, EnvironmentVariable, LaunchConfiguration, PathJoinSubstitution, PythonExpression
-from launch_ros.actions import Node, ROSTimer as RosTimer
+from launch_ros.actions import Node, RosTimer
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
@@ -142,7 +142,7 @@ def add_robot(
     )
 
     # Start Gazebo first, then insert robot entities in a predictable order.
-    ld.add_action(TimerAction(
+    ld.add_action(RosTimer(
         period=spawn_delay,
         actions=[robot_spawner],
         condition=robot_enabled,
@@ -512,7 +512,7 @@ def generate_launch_description():
         condition=_if_true('husky'),
     ))
 
-    ld.add_action(RosTimer(
+    ld.add_action(TimerAction(
         period=LaunchConfiguration('mission_region_delay'),
         actions=[ExecuteProcess(
             cmd=[
