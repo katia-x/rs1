@@ -515,3 +515,12 @@ TEST_F(WeedEstimationTest, SyntheticNoisyForegroundAccuracy)
     EXPECT_LT(rmse, 0.03); EXPECT_LT(max_error, 0.06);
 }
 }  // namespace
+
+int main(int argc, char ** argv)
+{
+    rclcpp::init(argc, argv);
+    testing::InitGoogleTest(&argc, argv);
+    const auto result = RUN_ALL_TESTS();
+    rclcpp::shutdown();
+    return result;
+}

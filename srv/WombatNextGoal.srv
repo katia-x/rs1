@@ -1,5 +1,15 @@
-bool skip_current_goal
+uint8 REQUEST_NEXT_GOAL=0
+uint8 RETRY_CURRENT_GOAL=1
+uint8 SKIP_CURRENT_GOAL=2
+uint8 WEED_HANDLED=3
+uint8 WEED_UNREACHABLE=4
+uint8 operation
+uint64 weed_id
 ---
 geometry_msgs/PoseStamped goal
 bool is_weed
+uint64 weed_id
 bool success
+bool mission_complete
+bool is_turn
+bool is_lane_start
