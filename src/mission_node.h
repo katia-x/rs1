@@ -12,12 +12,15 @@
 
 #include "mission_processing.h"
 
+#include "rs1/msg/wombat_status.hpp"
+#include "rs1/msg/wombat_weed_goal.hpp"
 #include "rs1/srv/wombat_next_goal.hpp"
 
 #include <cstddef>
 #include <memory>
 #include <optional>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 class MissionNode : public rclcpp::Node
@@ -26,9 +29,14 @@ public:
 	MissionNode();
 
 private:
+	enum class RecoveryMode { None, Retreat, LaneStart };
+
 	void region_callback(const geometry_msgs::msg::PoseArray::SharedPtr message);
 	void update_weed_target();
 	void publish_weed_estimates(const rclcpp::Time & time);
+	void publish_selected_weed(const rclcpp::Time & time);
+	void publish_weed_goal();
+	void publish_status(bool region_reset, bool mission_complete);
 	void clear_weed_target();
 	bool current_pose(geometry_msgs::msg::PoseStamped & pose);
 	void build_search_lines();
@@ -39,8 +47,7 @@ private:
 
 	std::string global_frame_;
 	std::string wombat_base_frame_;
-	double search_lane_spacing_{1.25};
-	double search_goal_distance_{2.5};
+	double search_lane_spacing_{1.5};
 	bool search_line_assignment_alternation{false};
 	std::size_t search_goal_index_{0};
 	std::vector<geometry_msgs::msg::Pose> region_vertices_;
@@ -52,13 +59,32 @@ private:
 	rclcpp::Publisher<geometry_msgs::msg::PointStamped>::SharedPtr target_publisher_;
 	rclcpp::Publisher<visualization_msgs::msg::Marker>::SharedPtr target_marker_publisher_;
 	rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr estimate_markers_publisher_;
+	rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr permanent_weed_publisher_;
+	rclcpp::Publisher<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_publisher_;
+	rclcpp::Publisher<rs1::msg::WombatStatus>::SharedPtr status_publisher_;
 	rclcpp::TimerBase::SharedPtr weed_timer_;
 	rclcpp::Service<rs1::srv::WombatNextGoal>::SharedPtr next_goal_service_;
 	std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
 	std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 	std::unique_ptr<MissionProcessing> mission_processing_;
+	std::optional<MissionProcessing::WeedEstimate> selected_weed_;
 	std::optional<std::uint64_t> selected_weed_id_;
+	std::unordered_set<std::uint64_t> unreachable_weed_ids_;
+	geometry_msgs::msg::PoseStamped last_goal_;
+	bool last_goal_valid_{false};
+	bool last_goal_was_weed_{false};
+	std::uint64_t last_goal_weed_id_{0};
+	bool last_goal_was_turn_{false};
+	bool last_goal_was_lane_start_{false};
+	double last_segment_heading_{0.0};
+	bool last_segment_heading_valid_{false};
+	bool turn_pending_{false};
+	RecoveryMode recovery_mode_{RecoveryMode::None};
+	std::size_t recovery_lane_end_index_{0};
+	double recovery_progress_{0.0};
+	bool mission_complete_{false};
 	bool target_visible_{false};
+	std::uint64_t mission_generation_{0};
 };
 
 #endif

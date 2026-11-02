@@ -24,18 +24,43 @@ models on ROS 2 Humble / Gazebo Fortress. From this repository directory:
 source /opt/ros/humble/setup.bash
 colcon build --packages-select rs1 --symlink-install
 source install/setup.bash
-ros2 launch rs1 rs1_demo.launch.py
+ros2 launch rs1 rs1_demo.launch.py rviz:=true
 ```
 
 To run the GUI, in another window run
 ```bash
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml   port:=8765   use_sim_time:=true
 ```
+
+To clear stale processes, to fix TF time travel errors,
+```bash
+pkill -TERM -f 'rs1_demo.launch.py'
+pkill -TERM -f '/home/avella/Documents/RS1/rs1/install/rs1/lib/rs1/'
+pkill -TERM -f '/opt/ros/humble/lib/nav2_'
+pkill -TERM -f '/opt/ros/humble/lib/slam_toolbox/'
+pkill -TERM -f 'ros_gz_bridge|ros_ign_bridge'
+pkill -TERM -f 'gz sim|ign gazebo'
+pkill -TERM -f 'rviz2'
+
+pgrep -af 'rs1_demo.launch|/home/avella/Documents/RS1/rs1/install|nav2_|slam_toolbox|ros_gz_bridge|ros_ign_bridge|gz sim|ign gazebo|rviz2'
+
+pkill -KILL -f 'rs1_demo.launch.py'
+pkill -KILL -f '/home/avella/Documents/RS1/rs1/install/rs1/lib/rs1/'
+pkill -KILL -f '/opt/ros/humble/lib/nav2_'
+pkill -KILL -f '/opt/ros/humble/lib/slam_toolbox/'
+pkill -KILL -f 'ros_gz_bridge|ros_ign_bridge'
+pkill -KILL -f 'gz sim|ign gazebo'
+pkill -KILL -f 'rviz2'
+```
+
 Then in the Foxglove web GUI "https://app.foxglove.dev/uni-1511e5f5/p/prj_0edhFva64NKjaY73/view" run the "ws://localhost:8765" then edit the layout (top right option) and choose import. Select the most recent layout#.json from the docs folder.
 
 See [simulation setup](docs/simulation_setup.md) for dependencies, RViz,
-teleoperation, spawn settings and RGB-D topics. Mission scaffold code is not
-compiled or launched yet.
+teleoperation, spawn settings and RGB-D topics. Mission and Wombat are launched
+as part of the demo.
+
+See [navigation architecture](docs/navigation_architecture.md) for the current
+Mission, Wombat, and Nav2 ownership boundaries.
 
 ## Plant Detection
 The pipeline receives images from the Husky camera, converts them to OpenCV format, and runs RTMDet Tiny object detection.

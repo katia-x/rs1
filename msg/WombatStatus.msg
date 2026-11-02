@@ -1,0 +1,3 @@
+uint64 mission_generation
+bool region_reset
+bool mission_complete
