@@ -392,40 +392,7 @@ void WombatNode::override_callback(const std_msgs::msg::Bool::ConstSharedPtr mes
 			"Manual override enabled; autonomous navigation stopped; Teleop may drive /husky1/cmd_vel");
 	} else {
 		RCLCPP_INFO(get_logger(), "Manual override disabled; autonomous navigation may resume");
-		request_next_goal();
-	}
-	publish_override_state();
-}
-
-void WombatNode::publish_override_state()
-{
-	std_msgs::msg::Bool state;
-	state.data = manual_override_;
-	override_state_publisher_->publish(state);
-}
-
-void WombatNode::cancel_active_goal()
-{
-	if (active_goal_) {
-		navigation_client_->async_cancel_goal(active_goal_);
-		active_goal_.reset();
-	}
-	mission_request_in_flight_ = false;
-}
-
-void WombatNode::override_callback(const std_msgs::msg::Bool::ConstSharedPtr message)
-{
-	if (!message || message->data == manual_override_) {
-		return;
-	}
-	manual_override_ = message->data;
-	if (manual_override_) {
-		cancel_active_goal();
-		RCLCPP_WARN(get_logger(),
-			"Manual override enabled; autonomous navigation stopped; Teleop may drive /husky1/cmd_vel");
-	} else {
-		RCLCPP_INFO(get_logger(), "Manual override disabled; autonomous navigation may resume");
-		request_next_goal();
+		request_next_goal(GoalRequest::REQUEST_NEXT_GOAL);
 	}
 	publish_override_state();
 }

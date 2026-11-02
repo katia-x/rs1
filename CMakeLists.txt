@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(rs1)
 
 find_package(ament_cmake REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
@@ -47,6 +48,7 @@ rosidl_target_interfaces(mission_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 add_executable(wombat_node src/wombat/wombat_node.cpp)
 ament_target_dependencies(
   wombat_node
+  action_msgs
   nav2_msgs
   rclcpp
   rclcpp_action
