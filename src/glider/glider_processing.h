@@ -40,8 +40,9 @@ enum class State
   FINAL_DESCEND,
   PICKUP,
   ASCEND,
-  RETURN_HOME,
-  DROP_OFF
+  GOTO_TRUCK,
+  DROP_OFF,
+  RETURN_HOME
 };
 
 class GliderProcessing
@@ -50,6 +51,7 @@ public:
 
   GliderProcessing(
     const Pose & home,
+    const Pose & truck,
     double safe_height = 15.0,
     double pickup_height = 0.5,
     double align_height = 1.5,
@@ -89,6 +91,7 @@ private:
   void handleFinalDescend();
   void handlePickup();
   void handleAscend();
+  void handleGoToTruck();
   void handleReturnHome();
   void handleDropOff();
 
@@ -110,6 +113,7 @@ private:
     const VelocityCommand & world_command) const;
 
   Pose home_;
+  Pose truck_;
 
   double safe_height_;
   double pickup_height_;

@@ -18,9 +18,13 @@ GliderNode::GliderNode()
   // Parameters
   // ---------------------------------------------------------
 
-  this->declare_parameter("home_x", -16.5);
-  this->declare_parameter("home_y", 16.5);
-  this->declare_parameter("home_z", 0.5);
+  this->declare_parameter("home_x", -17.5);
+  this->declare_parameter("home_y", 13.0);
+  this->declare_parameter("home_z", 0.2);
+
+  this->declare_parameter("truck_x", -16.3);
+  this->declare_parameter("truck_y", 16.5);
+  this->declare_parameter("truck_z", 1.0);
 
   this->declare_parameter("safe_height", 15.0);
   this->declare_parameter("pickup_height", 0.2);
@@ -33,7 +37,7 @@ GliderNode::GliderNode()
 
 
   // ---------------------------------------------------------
-  // Research facility/home position
+  // Home position
   // ---------------------------------------------------------
 
   glider::Pose home;
@@ -47,6 +51,21 @@ GliderNode::GliderNode()
   home.z =
     this->get_parameter("home_z").as_double();
 
+  // ---------------------------------------------------------
+  // Truck position
+  // ---------------------------------------------------------
+
+  glider::Pose truck;
+
+  truck.x =
+    this->get_parameter("truck_x").as_double();
+
+  truck.y =
+    this->get_parameter("truck_y").as_double();
+
+  truck.z =
+    this->get_parameter("truck_z").as_double();
+
 
   // ---------------------------------------------------------
   // Create processing object
@@ -54,7 +73,7 @@ GliderNode::GliderNode()
 
   processing_ =
     std::make_unique<glider::GliderProcessing>(
-      home,
+      home, truck,
       this->get_parameter("safe_height").as_double(),
       this->get_parameter("pickup_height").as_double(),
       this->get_parameter("align_height").as_double(),

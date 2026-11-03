@@ -214,9 +214,9 @@ def generate_launch_description():
         description='Launch the Parrot / glider'))
 
     # Spawn pose for the glider
-    ld.add_action(DeclareLaunchArgument('parrot_x', default_value='0.0'))
-    ld.add_action(DeclareLaunchArgument('parrot_y', default_value='0.0'))
-    ld.add_action(DeclareLaunchArgument('parrot_z', default_value='1.5'))
+    ld.add_action(DeclareLaunchArgument('parrot_x', default_value='-17.5'))
+    ld.add_action(DeclareLaunchArgument('parrot_y', default_value='13.0'))
+    ld.add_action(DeclareLaunchArgument('parrot_z', default_value='0.2'))
     ld.add_action(DeclareLaunchArgument('parrot_yaw', default_value='0.0'))
 
     # Resource paths
@@ -296,9 +296,12 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': use_sim_time,
-            'home_x': -16.5,
-            'home_y': 16.5,
-            'home_z': 0.5,
+            'home_x': -17.5,
+            'home_y': 13.0,
+            'home_z': 0.2,
+            'truck_x': -16.3,
+            'truck_y': 16.5,
+            'truck_z': 1.0,
             'safe_height': 15.0,
             'pickup_height': 0.2,
             'control_rate': 20.0,

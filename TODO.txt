@@ -1,5 +1,5 @@
-- Make sure robot with no sonar works well, make robot move to poo and pick it up
+- Make robot move to poo and pick it up
 - make poo follow drone in simulation
-- make sure drone drops off poo on pickup truck
 - chat with kat about maybe doing teleop for alignment instead of using rgbd camera
 - potentially use lidar for pickup
+- make home and dropoff different locations, make home next to pickup truck?

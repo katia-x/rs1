@@ -15,16 +15,18 @@ namespace glider
 
 GliderProcessing::GliderProcessing(
   const Pose & home,
+  const Pose & truck,
   double safe_height,
   double pickup_height,
   double align_height,
   double xy_tolerance,
   double z_tolerance)
 : home_(home),
+  truck_(truck),
   safe_height_(safe_height),
   pickup_height_(pickup_height),
   align_height_(align_height),
-  dropoff_height_(home.z), // add a little bit to this?
+  //dropoff_height_(truck.z), // add a little bit to this?
   xy_tolerance_(xy_tolerance),
   z_tolerance_(z_tolerance),
   current_pose_(home)
@@ -149,12 +151,16 @@ GliderProcessing::tick()
       handleAscend();
       break;
 
-    case State::RETURN_HOME:
-      handleReturnHome();
+    case State::GOTO_TRUCK:
+      handleGoToTruck();
       break;
 
     case State::DROP_OFF:
       handleDropOff();
+      break;
+
+    case State::RETURN_HOME:
+      handleReturnHome();
       break;
   }
 
@@ -434,21 +440,21 @@ void GliderProcessing::handleAscend()
 
     command_.vz = 0.0;
 
-    transition(State::RETURN_HOME);
+    transition(State::GOTO_TRUCK);
   }
 }
 
 
 /*
  * ---------------------------------------------------------
- * RETURN HOME
+ * RETURN TO TRUCK
  * ---------------------------------------------------------
  *
  * Fly horizontally back to the research facility.
  */
-void GliderProcessing::handleReturnHome()
+void GliderProcessing::handleGoToTruck()
 {
-  Pose target = home_;
+  Pose target = truck_;
 
   target.z = safe_height_;
 
@@ -458,7 +464,7 @@ void GliderProcessing::handleReturnHome()
   command_.vz = 0.0;
 
   status_msg_ =
-    "RETURN_HOME: returning to research facility";
+    "GOTO_TRUCK: returning to research facility";
 
   if (xyClose(current_pose_, target)) {
 
@@ -479,49 +485,63 @@ void GliderProcessing::handleReturnHome()
  */
 void GliderProcessing::handleDropOff()
 {
-  const double z_error =
-    dropoff_height_ - current_pose_.z;
 
-  command_.vz =
-    clamp(
-      kp_z_ * z_error,
-      -max_z_speed_,
-      max_z_speed_);
+  Pose target = truck_;
+  command_.vx = 0.0;
+  command_.vy = 0.0;
+    const double height_error = target.z - current_pose_.z;
+    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+    status_msg_ = "DESCEND: odometry fallback → align height";
+
+    if (std::abs(height_error) <= z_tolerance_) {
+      command_.vz = 0.0;
+      current_goal_idx_++;
+        transition(State::RETURN_HOME);
+    }
+  //}
+  
+
+  command_ = worldToBody(command_);
+}
+
+void GliderProcessing::handleReturnHome()
+{
+  /*
+    * More poo locations remain.
+    */
+  if (current_goal_idx_ < goals_.size()) {
+
+    transition(State::TAKEOFF);
+  }
+
+  Pose target = home_;
+
+  //target.z = safe_height_;
+
+  command_ =
+    positionControl(target);
+
 
   status_msg_ =
-    "DROP_OFF: landing at research facility";
+    "RETURN_HOME: returning to research facility";
 
+  if (xyClose(current_pose_, target)) {
 
-  if (std::abs(z_error) <= z_tolerance_) {
+    command_.vx = 0.0;
+    command_.vy = 0.0;
 
-    command_ = VelocityCommand{};
+    const double height_error = target.z - current_pose_.z;
+    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
 
-    carrying_poo_ = false;
-
-    ++current_goal_idx_;
-
-
-    /*
-     * More poo locations remain.
-     */
-    if (current_goal_idx_ < goals_.size()) {
-
-      transition(State::TAKEOFF);
-    }
-
-    /*
-     * No more poo locations.
-     */
-    else {
-
+    if (std::abs(height_error) <= z_tolerance_) {
+      command_.vz = 0.0;
       goals_.clear();
-
       current_goal_idx_ = 0;
-
       transition(State::STANDBY);
     }
   }
 }
+
 
 
 /*
