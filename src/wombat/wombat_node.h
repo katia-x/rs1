@@ -33,7 +33,8 @@ private:
 		Turning,
 		Searching,
 		Recovery,
-		Complete
+		Complete,
+		Abort
 	};
 	struct PendingRequest
 	{
@@ -53,6 +54,8 @@ private:
 	void weed_goal_callback(const rs1::msg::WombatWeedGoal::SharedPtr message);
 	void status_callback(const rs1::msg::WombatStatus::SharedPtr message);
 	void complete_mission();
+	bool mission_stopped() const;
+	void abort_mission();
 	void dispatch_pending_weed_goal();
 	void handle_nav_cancel(rclcpp_action::Client<NavigateToPose>::CancelResponse::SharedPtr response);
 	void send_navigation_goal(const geometry_msgs::msg::PoseStamped & pose, bool is_weed,
@@ -66,6 +69,7 @@ private:
 	const std::string global_frame_;
 	const double lane_start_wait_duration_;
 	const int max_goal_retries_;
+	const double nav_unavailable_timeout_;
 
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedPtr mission_client_;
 	rclcpp::Subscription<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_subscription_;
@@ -89,6 +93,8 @@ private:
 	std::uint64_t mission_request_generation_{0};
 	State state_{State::WaitingForRegion};
 	std::chrono::steady_clock::time_point lane_wait_until_{};
+	bool nav_unavailable{false};
+	std::chrono::steady_clock::time_point nav_unavailable_since_{};
 };
 
 #endif
