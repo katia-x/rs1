@@ -65,12 +65,28 @@
   font-weight: bold;
 }
 
-.operator-map {
+.operator-map-container {
+  aspect-ratio: 1 / 1;
+  max-height: 70vh;
   width: 100%;
-  min-height: 280px;
+  position: relative;
+}
+
+.operator-map {
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
   background: #10161b;
   border: 1px solid #536372;
   cursor: crosshair;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.map-background-image {
+  opacity: 0.8;
+  pointer-events: none;
 }
 
 .region-overlay {
@@ -104,6 +120,15 @@
   stroke-width: 0.4;
 }
 
+.wombat-trail {
+  fill: none;
+  stroke: #f26d85;
+  stroke-width: 0.45;
+  stroke-dasharray: 1.2 0.8;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
 .operator-diagnostics {
   color: #b7c3cc;
 }
@@ -133,7 +158,8 @@ input {
 
 .map {
   background-color: #15202b;
-  background-image: linear-gradient(#2c3b4c 1px, transparent 1px),
+  background-image:
+    linear-gradient(#2c3b4c 1px, transparent 1px),
     linear-gradient(90deg, #2c3b4c 1px, transparent 1px);
   background-size: 10% 10%;
   border: 1px solid #64748b;
