@@ -24,7 +24,7 @@ GliderProcessing::GliderProcessing(
   safe_height_(safe_height),
   pickup_height_(pickup_height),
   align_height_(align_height),
-  dropoff_height_(home.z),
+  dropoff_height_(home.z), // add a little bit to this?
   xy_tolerance_(xy_tolerance),
   z_tolerance_(z_tolerance),
   current_pose_(home)

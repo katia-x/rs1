@@ -15,7 +15,7 @@
 
 #include "glider_processing.h"
 
-//#include "rs1/srv/get_cube_centre.hpp"
+#include "rs1/srv/get_cube_centre.hpp"
 
 
 
@@ -67,7 +67,7 @@ private:
   std::string last_status_;
 
   // Client (service)
-  //rclcpp::Client<rs1::srv::GetCubeCentre>::SharedPtr sonar_client_;
+  rclcpp::Client<rs1::srv::GetCubeCentre>::SharedPtr sonar_client_;
 
 
   // Control timer

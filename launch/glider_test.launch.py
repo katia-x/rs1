@@ -296,9 +296,9 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'use_sim_time': use_sim_time,
-            'home_x': 0.0,
-            'home_y': 0.0,
-            'home_z': 1.5,
+            'home_x': -16.5,
+            'home_y': 16.5,
+            'home_z': 0.5,
             'safe_height': 15.0,
             'pickup_height': 0.2,
             'control_rate': 20.0,

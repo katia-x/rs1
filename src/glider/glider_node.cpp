@@ -18,9 +18,9 @@ GliderNode::GliderNode()
   // Parameters
   // ---------------------------------------------------------
 
-  this->declare_parameter("home_x", 0.0);
-  this->declare_parameter("home_y", 0.0);
-  this->declare_parameter("home_z", 1.5);
+  this->declare_parameter("home_x", -16.5);
+  this->declare_parameter("home_y", 16.5);
+  this->declare_parameter("home_z", 0.5);
 
   this->declare_parameter("safe_height", 15.0);
   this->declare_parameter("pickup_height", 0.2);
