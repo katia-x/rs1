@@ -315,22 +315,22 @@ void GliderProcessing::handleAlign()
   command_.vy = clamp(kp_xy_ * (xy_target.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
 
   // hold height
-  if (height_sensor_valid_) {
-    const double height_error = height_above_poo_ - align_height_;
-    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-  } else {
-    command_.vz = 0.0;
-  }
+  // if (height_sensor_valid_) {
+  //   const double height_error = height_above_poo_ - align_height_;
+  //   command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+  // } else {
+  command_.vz = 0.0;
+  //}
 
   
   
 
-  status_msg_ = detected_poo_valid_
-    ? "ALIGN: fine-tuning over sonar centre"
-    : "ALIGN: hovering (waiting for sonar)";
+  // status_msg_ = detected_poo_valid_
+  //   ? "ALIGN: fine-tuning over sonar centre"
+  //   : "ALIGN: hovering (waiting for sonar)";
 
   // Once XY is good, go to final descent
-  if (detected_poo_valid_ && xyClose(current_pose_, xy_target)) {
+  if (/*detected_poo_valid_ && */xyClose(current_pose_, xy_target)) {
     command_.vx = 0.0;
     command_.vy = 0.0;
     transition(State::FINAL_DESCEND);
@@ -372,8 +372,9 @@ void GliderProcessing::handleFinalDescend()
     command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
     status_msg_ = "FINAL DESCEND: odometry fallback → pickup height";
 
-    if (current_pose_.z < 0.4 && command_.vz < 0.0) {
+    if (current_pose_.z < 0.4 /*&& command_.vz < 0.0*/) {
     command_.vz = 0.0;
+      transition(State::PICKUP);
     }
     if (std::abs(height_error) <= z_tolerance_) {
       command_.vz = 0.0;

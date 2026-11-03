@@ -300,7 +300,7 @@ def generate_launch_description():
             'home_y': 0.0,
             'home_z': 1.5,
             'safe_height': 15.0,
-            'pickup_height': 0.5,
+            'pickup_height': 0.2,
             'control_rate': 20.0,
         }],
     ))
