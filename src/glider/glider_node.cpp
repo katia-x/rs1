@@ -229,6 +229,8 @@ void GliderNode::trajectoryCallback(
 
   goal.is_poo = true;
 
+  goal.model_name = "poo_2";
+
 
   /*
    * Add the goal rather than replacing the previous goals.
@@ -300,6 +302,56 @@ void GliderNode::heightCallback(
   }
 }
 
+// ---------------------------------------------------------
+// Remove a poo model from the world
+// ---------------------------------------------------------
+void GliderNode::removePooModel(const std::string & name)
+{
+  // Using ignition
+  std::stringstream ss;
+  ss << "ign service -s /world/rs1_terrain/remove "
+     << "--reqtype ignition.msgs.Entity "
+     << "--reptype ignition.msgs.Boolean "
+     << "--timeout 3000 "
+     << "--req 'name: \"" << name << "\", type: MODEL'";  
+
+  int ret = std::system(ss.str().c_str());
+  if (ret != 0) {
+    RCLCPP_WARN(this->get_logger(), "Failed to remove model '%s'", name.c_str());
+  } else {
+    RCLCPP_INFO(this->get_logger(), "Removed model '%s'", name.c_str());
+  }
+}
+
+// ---------------------------------------------------------
+// Spawn a poo model at the truck
+// ---------------------------------------------------------
+void GliderNode::spawnPooAtTruck(const std::string & name)
+{
+  // Path to the same SDF we already use
+  std::string sdf_path =
+    ament_index_cpp::get_package_share_directory("rs1") +
+    "/worlds/poo_cube/poo_cube.sdf";
+
+  // Truck pose 
+  double x = this->get_parameter("truck_x").as_double();
+  double y = this->get_parameter("truck_y").as_double();
+  double z = this->get_parameter("truck_z").as_double() - 0.2;  // slightly below glider
+
+  std::stringstream ss;
+  ss << "ros2 run ros_gz_sim create "
+     << "-world rs1_terrain "
+     << "-name " << name << " "
+     << "-x " << x << " -y " << y << " -z " << z << " "
+     << "-file " << sdf_path;
+
+  int ret = std::system(ss.str().c_str());
+  if (ret != 0) {
+    RCLCPP_WARN(this->get_logger(), "Failed to spawn model '%s' at truck", name.c_str());
+  } else {
+    RCLCPP_INFO(this->get_logger(), "Spawned model '%s' at truck", name.c_str());
+  }
+}
 
 /*
  * ---------------------------------------------------------
@@ -319,6 +371,26 @@ void GliderNode::controlLoop()
   const auto [command, status] =
     processing_->tick();
 
+  // Detect pickup
+  static bool was_carrying = false;
+  bool is_carrying = processing_->isCarryingPoo();   // add a simple getter
+
+  if (is_carrying && !was_carrying) {
+    const std::string name = processing_->currentModelName();
+    if (!name.empty()) {
+      removePooModel(name);
+      current_model_name_ = name;   // remember it for the drop
+    }
+  }
+
+  if (!is_carrying && was_carrying) {
+    if (!current_model_name_.empty()) {
+      spawnPooAtTruck(current_model_name_);
+      current_model_name_.clear();
+    }
+  }
+
+  was_carrying = is_carrying;
   // call sonar service once when we enter ALIGN 
   static glider::State last_state = glider::State::STANDBY;
   const auto current_state = processing_->state();

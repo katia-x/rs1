@@ -20,6 +20,7 @@ struct Goal
 {
   Pose pose;
   bool is_poo{true};
+  std::string model_name;
 };
 
 struct VelocityCommand
@@ -57,6 +58,10 @@ public:
     double align_height = 1.5,
     double xy_tolerance = 0.4,
     double z_tolerance = 0.15);
+  
+  // For getting and destroying poos
+  bool isCarryingPoo() const;
+  std::string currentModelName() const;
 
   // Current Parrot position
   void setPose(const Pose & pose);
@@ -94,6 +99,7 @@ private:
   void handleGoToTruck();
   void handleReturnHome();
   void handleDropOff();
+  
 
   void transition(State new_state);
 

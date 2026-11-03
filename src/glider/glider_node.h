@@ -13,6 +13,10 @@
 
 #include <std_msgs/msg/string.hpp>
 
+#include <cstdlib>          
+#include <sstream>
+#include <ament_index_cpp/get_package_share_directory.hpp>
+
 #include "glider_processing.h"
 
 #include "rs1/srv/get_cube_centre.hpp"
@@ -41,6 +45,14 @@ private:
 
   void controlLoop();
 
+  void removePooModel(
+    const std::string & name);
+
+  void spawnPooAtTruck(
+    const std::string & name);
+
+
+  std::string current_model_name_;
 
   // Processing layer
   std::unique_ptr<glider::GliderProcessing> processing_;

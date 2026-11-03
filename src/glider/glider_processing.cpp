@@ -34,11 +34,24 @@ GliderProcessing::GliderProcessing(
   status_msg_ = "STANDBY: waiting for poo locations";
 }
 
+bool GliderProcessing::isCarryingPoo() const
+{
+  return carrying_poo_;
+}
+
+std::string GliderProcessing::currentModelName() const
+{
+  if (current_goal_idx_ < goals_.size()) {
+    return goals_[current_goal_idx_].model_name;
+  }
+  return "";
+}
 
 void GliderProcessing::setPose(const Pose & pose)
 {
   current_pose_ = pose;
 }
+
 
 
 /*
@@ -495,6 +508,7 @@ void GliderProcessing::handleDropOff()
 
     if (std::abs(height_error) <= z_tolerance_) {
       command_.vz = 0.0;
+      carrying_poo_ = false;
       current_goal_idx_++;
         transition(State::RETURN_HOME);
     }
