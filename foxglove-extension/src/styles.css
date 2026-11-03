@@ -108,6 +108,12 @@
   stroke-width: 0.25;
 }
 
+.permanent-weed-point {
+  fill: #b084f5;
+  stroke: #eadcff;
+  stroke-width: 0.25;
+}
+
 .target-point {
   fill: #ffbd66;
   stroke: #fff3d4;

@@ -11,6 +11,7 @@ type PanelState = {
   globalFrame?: string;
   regionTopic?: string;
   estimateTopic?: string;
+  permanentTopic?: string;
   targetTopic?: string;
   tfTopic?: string;
   tfStaticTopic?: string;
@@ -200,6 +201,9 @@ function OperatorPanel({
   const [estimateTopic, setEstimateTopic] = useState(
     initialState.estimateTopic ?? "/husky1/weed_estimate_markers",
   );
+  const [permanentTopic, setPermanentTopic] = useState(
+    initialState.permanentTopic ?? "/husky1/permanent_weed_exclusions",
+  );
   const [targetTopic, setTargetTopic] = useState(
     initialState.targetTopic ?? "/husky1/target_weed_marker",
   );
@@ -216,6 +220,7 @@ function OperatorPanel({
   const [region, setRegion] = useState<Point[]>([]);
   const [draftRegion, setDraftRegion] = useState<Point[]>([]);
   const [weeds, setWeeds] = useState<Point[]>([]);
+  const [permanentWeeds, setPermanentWeeds] = useState<Point[]>([]);
   const [target, setTarget] = useState<Point>();
   const [wombat, setWombat] = useState<Point>();
   const [wombatTrail, setWombatTrail] = useState<Point[]>([]);
@@ -264,6 +269,19 @@ function OperatorPanel({
         );
         setWeeds(visible.map((marker) => marker.pose!.position!));
         setLastMarkerTime(Date.now());
+      }
+
+      const permanentEvent = latest(permanentTopic);
+      if (permanentEvent) {
+        const message = permanentEvent.message as {
+          header?: { frame_id?: string };
+        };
+        if (
+          !message.header?.frame_id ||
+          message.header.frame_id === globalFrame
+        ) {
+          setPermanentWeeds(regionPoints(permanentEvent.message));
+        }
       }
 
       const targetEvent = latest(targetTopic);
@@ -331,6 +349,7 @@ function OperatorPanel({
     context.subscribe([
       { topic: regionTopic },
       { topic: estimateTopic },
+      { topic: permanentTopic },
       { topic: targetTopic },
       { topic: tfTopic },
       { topic: tfStaticTopic },
@@ -339,6 +358,7 @@ function OperatorPanel({
   }, [
     context,
     estimateTopic,
+    permanentTopic,
     globalFrame,
     overrideTopic,
     regionTopic,
@@ -352,6 +372,7 @@ function OperatorPanel({
       globalFrame,
       regionTopic,
       estimateTopic,
+      permanentTopic,
       targetTopic,
       tfTopic,
       tfStaticTopic,
@@ -440,6 +461,14 @@ function OperatorPanel({
           <input
             value={estimateTopic}
             onChange={(event) => setEstimateTopic(event.target.value)}
+            onBlur={saveState}
+          />
+        </label>
+        <label>
+          Permanent weed topic
+          <input
+            value={permanentTopic}
+            onChange={(event) => setPermanentTopic(event.target.value)}
             onBlur={saveState}
           />
         </label>
@@ -535,6 +564,18 @@ function OperatorPanel({
               />
             );
           })}
+          {permanentWeeds.map((point, index) => {
+            const projected = project(point);
+            return (
+              <circle
+                className="permanent-weed-point"
+                key={`permanent-weed-${index}`}
+                cx={projected.x}
+                cy={projected.y}
+                r="1.5"
+              />
+            );
+          })}
           {target && (
             <circle
               className="target-point"
@@ -592,6 +633,7 @@ function OperatorPanel({
             : `${draftRegion.length}/2 corners`}
         </span>
         <span>Weeds: {weeds.length}</span>
+        <span>Permanent weeds: {permanentWeeds.length}</span>
         <span>Target: {target ? "visible" : "none"}</span>
         <span>
           Wombat TF: {wombat ? "available" : "missing"} ({age(lastTfTime)})
