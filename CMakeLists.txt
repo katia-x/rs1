@@ -30,6 +30,7 @@ find_package(rosidl_default_generators REQUIRED)
 # ---------------------------------------------------------------------------
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GetCubeCentre.srv"
+  "msg/GliderGoal.msg"
   DEPENDENCIES geometry_msgs
 )
 

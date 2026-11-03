@@ -93,7 +93,7 @@ GliderNode::GliderNode()
   //
   traj_sub_ =
     this->create_subscription<
-      geometry_msgs::msg::PoseStamped>(
+      rs1::msg::GliderGoal>(
         "/glider/trajectory_goals",
         10,
         std::bind(
@@ -211,25 +211,25 @@ GliderNode::GliderNode()
  * Receive poo location
  * ---------------------------------------------------------
  */
-void GliderNode::trajectoryCallback(
-  const geometry_msgs::msg::PoseStamped::SharedPtr msg)
+void GliderNode::trajectoryCallback(const rs1::msg::GliderGoal::SharedPtr msg)
 {
   glider::Goal goal;
 
   goal.pose.x =
-    msg->pose.position.x;
+    msg->x;
 
   goal.pose.y =
-    msg->pose.position.y;
+    msg->y;
 
   goal.pose.z =
-    msg->pose.position.z;
+    msg->z;
 
   goal.pose.yaw = 0.0;
 
   goal.is_poo = true;
 
-  goal.model_name = "poo_2";
+  goal.model_name = 
+    msg->model_name;
 
 
   /*
@@ -248,7 +248,8 @@ void GliderNode::trajectoryCallback(
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Received poo location: x=%.2f y=%.2f z=%.2f",
+    "Received poo location: name=%s x=%.2f y=%.2f z=%.2f",
+    goal.model_name.c_str(),
     goal.pose.x,
     goal.pose.y,
     goal.pose.z);

@@ -19,6 +19,8 @@
 
 #include "glider_processing.h"
 
+#include "rs1/msg/glider_goal.hpp"
+
 #include "rs1/srv/get_cube_centre.hpp"
 
 
@@ -35,7 +37,7 @@ private:
 
   // ROS callbacks
   void trajectoryCallback(
-    const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+    const rs1::msg::GliderGoal::SharedPtr msg);
 
   void odometryCallback(
     const nav_msgs::msg::Odometry::SharedPtr msg);
@@ -60,7 +62,7 @@ private:
 
   // Subscribers
   rclcpp::Subscription<
-    geometry_msgs::msg::PoseStamped>::SharedPtr traj_sub_;
+    rs1::msg::GliderGoal>::SharedPtr traj_sub_;
 
   rclcpp::Subscription<
     nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
