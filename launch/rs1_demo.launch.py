@@ -286,12 +286,12 @@ def generate_launch_description():
         'mission_region_delay', default_value='20.0',
         description='Simulation seconds before publishing the mission search region'))
 
-    # husky_launch_arg = DeclareLaunchArgument(
-    #     'husky',
-    #     default_value='True',
-    #     description='Launch the Husky UGV instance in namespace /husky1',
-    # )
-    # ld.add_action(husky_launch_arg)
+    husky_launch_arg = DeclareLaunchArgument(
+        'husky',
+        default_value='True',
+        description='Launch the Husky UGV instance in namespace /husky1',
+    )
+    ld.add_action(husky_launch_arg)
 
     parrot_launch_arg = DeclareLaunchArgument(
         'parrot',
