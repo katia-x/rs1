@@ -22,9 +22,9 @@ GliderNode::GliderNode()
   this->declare_parameter("home_y", 13.0);
   this->declare_parameter("home_z", 0.2);
 
-  this->declare_parameter("truck_x", -16.3);
+  this->declare_parameter("truck_x", -16.5);
   this->declare_parameter("truck_y", 16.5);
-  this->declare_parameter("truck_z", 1.0);
+  this->declare_parameter("truck_z", 2.0);
 
   this->declare_parameter("safe_height", 15.0);
   this->declare_parameter("pickup_height", 0.2);
@@ -281,7 +281,7 @@ void GliderNode::odometryCallback(
     2.0 * (q.w * q.z + q.x * q.y),
     1.0 - 2.0 * (q.y * q.y + q.z * q.z));
 
-
+  current_pose_ = pose;
   processing_->setPose(pose);
 }
 
@@ -335,9 +335,9 @@ void GliderNode::spawnPooAtTruck(const std::string & name)
     "/worlds/poo_cube/poo_cube.sdf";
 
   // Truck pose 
-  double x = this->get_parameter("truck_x").as_double();
-  double y = this->get_parameter("truck_y").as_double();
-  double z = this->get_parameter("truck_z").as_double() - 0.2;  // slightly below glider
+  double x = current_pose_.x;
+  double y = current_pose_.y;
+  double z = current_pose_.z - 0.20;   
 
   std::stringstream ss;
   ss << "ros2 run ros_gz_sim create "

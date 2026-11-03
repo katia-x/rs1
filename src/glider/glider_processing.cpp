@@ -467,8 +467,8 @@ void GliderProcessing::handleAscend()
  */
 void GliderProcessing::handleGoToTruck()
 {
-  Pose target = truck_;
 
+  Pose target = truck_;
   target.z = safe_height_;
 
   command_ =

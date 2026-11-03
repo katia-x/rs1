@@ -54,6 +54,9 @@ private:
     const std::string & name);
 
 
+    
+  //glider pose for poo movement
+  glider::Pose current_pose_;
   std::string current_model_name_;
 
   // Processing layer
@@ -86,4 +89,5 @@ private:
 
   // Control timer
   rclcpp::TimerBase::SharedPtr timer_;
+  
 };
