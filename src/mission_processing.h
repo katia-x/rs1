@@ -9,6 +9,10 @@
 #include <unordered_set>
 #include <vector>
 
+#include <map>
+#include <opencv2/core/mat.hpp>
+#include <sensor_msgs/msg/image.hpp>
+#include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/point.hpp>
 #include <geometry_msgs/msg/pose.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -21,9 +25,36 @@
 class MissionProcessing
 {
 public:
+    // Colour and geometry thresholds are simulation heuristics, not semantic labels.
+    struct RockConfig
+    {
+        bool enabled{false};
+        int max_saturation{70};           // OpenCV HSV: 0..255.
+        int min_brightness{35};
+        int max_brightness{235};
+        double ground_z{0.0};             // Flat simulated ground, in global_frame.
+        double min_height{0.08};          // Metres above that ground.
+        double max_height{2.0};
+        double max_range{8.0};            // Euclidean camera range, metres.
+        double neighbour_distance{0.12};  // Maximum 3D gap between adjacent pixels.
+        int min_component_pixels{40};
+        double min_horizontal_extent{0.15};
+        double cell_size{0.05};           // Sparse debug-map resolution, metres.
+        double max_time_difference{0.03};
+        std::size_t max_map_cells{100000};
+    };
+
+    struct RockFrame
+    {
+        std_msgs::msg::Header header;  // RGB acquisition header.
+        cv::Mat mask;                 // CV_8UC1: accepted rock pixels, 0 or 255.
+        std::vector<geometry_msgs::msg::Point> points;  // In global_frame.
+    };
+
     struct Config
     {
         std::string global_frame{"map"};
+        RockConfig rock;
         double confidence_threshold{0.75};
         double max_time_difference{0.1};
         double max_observation_age{2.0};
@@ -70,9 +101,32 @@ public:
     UpdateResult update(const rclcpp::Time & now);
     CloudTiming cloud_timing() const;
 
-    const std::vector<WeedEstimate> & estimates() const noexcept { return estimates_; }
-    const std::vector<WeedEstimate> & permanent_weeds() const noexcept { return permanent_weeds_; }
-    const Config & config() const noexcept { return config_; }
+    void receive_image(sensor_msgs::msg::Image::ConstSharedPtr image);
+    std::optional<RockFrame> update_rocks(const rclcpp::Time & now);
+    // Stateless operation exposed so geometry/colour decisions can be tested offline.
+    RockFrame detect_rocks(const cv::Mat & bgr,
+        const sensor_msgs::msg::PointCloud2 & cloud,
+        const geometry_msgs::msg::TransformStamped & cloud_to_global) const;
+    const std::map<std::pair<int, int>, geometry_msgs::msg::Point> & rock_cells() const noexcept
+    {
+        return rock_cells_;
+    }
+
+    const std::vector<WeedEstimate> & estimates() const noexcept
+    {
+        return estimates_;
+    }
+
+    const std::vector<WeedEstimate> & permanent_weeds() const noexcept
+    {
+        return permanent_weeds_;
+    }
+
+    const Config & config() const noexcept
+    {
+        return config_;
+    }
+
     std::optional<WeedEstimate> select_target(
         const geometry_msgs::msg::Point & robot, const SearchLane & lane,
         const std::vector<geometry_msgs::msg::Pose> & region,
@@ -98,6 +152,11 @@ private:
     std::vector<WeedEstimate> estimates_;
     std::vector<WeedEstimate> permanent_weeds_;
     std::uint64_t next_id_{1};
+    std::deque<sensor_msgs::msg::Image::ConstSharedPtr> images_;
+    std::optional<rclcpp::Time> last_rock_stamp_;
+    std::optional<rclcpp::Time> last_rock_update_time_;
+    std::map<std::pair<int, int>, geometry_msgs::msg::Point> rock_cells_;
+
 };
 
 #endif  // RS1_MISSION_PROCESSING_H

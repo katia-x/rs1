@@ -2,14 +2,30 @@ mission_node:
   ros__parameters:
     # Startup settings for weed estimation and search navigation.
     search_lane_spacing: 3.0
+    location_tolerance: 0.25
+    # Debug only: does not publish to Nav2 or alter obstacle costs.
+    rock:
+      enabled: true
+      max_saturation: 70
+      min_brightness: 35
+      max_brightness: 235
+      ground_z: 0.0                 # Flat simulation only; not camera/base-link Z.
+      min_height: 0.08
+      max_height: 2.0
+      max_range: 8.0
+      neighbour_distance: 0.12
+      min_component_pixels: 40
+      min_horizontal_extent: 0.15
+      cell_size: 0.05
+      max_time_difference: 0.03
     weed:
       confidence_threshold: 0.6
       max_time_difference: 0.1         # Image/cloud timestamp difference, seconds.
       max_observation_age: 2.0        # Maximum input age, simulation seconds.
-      roi_fraction: 0.5               # Central fraction of each detection box.
+      roi_fraction: 1.0               # Central fraction of each detection box.
       depth_cluster_tolerance: 0.15   # Maximum forward-depth span, metres.
       min_valid_samples: 3
-      min_cluster_fraction: 0.6       # Required share of valid central samples.
+      min_cluster_fraction: 0.2       # Required share of valid central samples.
       association_distance: 0.5       # Maximum 3D tracking match distance, metres.
       smoothing_factor: 0.5          # Weight given to the latest observation.
       track_timeout: 3.0              # Expire since last depth observation, seconds.
@@ -18,3 +34,4 @@ wombat_node:
   ros__parameters:
     lane_start_wait_duration: 2.0     # Pause after reaching a lane start or turn, seconds.
     max_goal_retries: 3               # Retries before a navigation goal is skipped.
+    nav_unavailable_timeout: 60.0     # Seconds of continuous unavailability.

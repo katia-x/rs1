@@ -3,7 +3,7 @@
 from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
-    ExecuteProcess,
+    # ExecuteProcess,
     GroupAction,
     IncludeLaunchDescription,
     SetEnvironmentVariable,
@@ -19,14 +19,13 @@ from launch_ros.substitutions import FindPackageShare
 
 _TRUE_STRINGS = "['true', '1', 'yes', 'on']"
 
-MISSION_REGION = (
-    "{header: {frame_id: map}, poses: ["
-    "{position: {x: -5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}}, "
-    "{position: {x: 5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}}, "
-    "{position: {x: 5.0, y: 5.0, z: 0.0}, orientation: {w: 1.0}}, "
-    "{position: {x: -5.0, y: 5.0, z: 0.0}, orientation: {w: 1.0}}]}"
-)
-
+# MISSION_REGION = (
+#     "{header: {frame_id: map}, poses: ["
+#     "{position: {x: -5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}}, "
+#     "{position: {x: 5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}}, "
+#     "{position: {x: 5.0, y: 5.0, z: 0.0}, orientation: {w: 1.0}}, "
+#     "{position: {x: -5.0, y: 5.0, z: 0.0}, orientation: {w: 1.0}}]}"
+# )
 
 def _is_true_expression(name):
     return ["'", LaunchConfiguration(name), "'.lower() in ", _TRUE_STRINGS]
@@ -287,12 +286,12 @@ def generate_launch_description():
         'mission_region_delay', default_value='20.0',
         description='Simulation seconds before publishing the mission search region'))
 
-    husky_launch_arg = DeclareLaunchArgument(
-        'husky',
-        default_value='True',
-        description='Launch the Husky UGV instance in namespace /husky1',
-    )
-    ld.add_action(husky_launch_arg)
+    # husky_launch_arg = DeclareLaunchArgument(
+    #     'husky',
+    #     default_value='True',
+    #     description='Launch the Husky UGV instance in namespace /husky1',
+    # )
+    # ld.add_action(husky_launch_arg)
 
     parrot_launch_arg = DeclareLaunchArgument(
         'parrot',
@@ -512,16 +511,16 @@ def generate_launch_description():
         condition=_if_true('husky'),
     ))
 
-    ld.add_action(TimerAction(
-        period=LaunchConfiguration('mission_region_delay'),
-        actions=[ExecuteProcess(
-            cmd=[
-                'ros2', 'topic', 'pub', '--once',
-                '/region', 'geometry_msgs/msg/PoseArray', MISSION_REGION,
-            ],
-            output='screen',
-        )],
-        condition=_if_true('husky'),
-    ))
+    # ld.add_action(TimerAction(
+    #     period=LaunchConfiguration('mission_region_delay'),
+    #     actions=[ExecuteProcess(
+    #         cmd=[
+    #             'ros2', 'topic', 'pub', '--once',
+    #             '/region', 'geometry_msgs/msg/PoseArray', MISSION_REGION,
+    #         ],
+    #         output='screen',
+    #     )],
+    #     condition=_if_true('husky'),
+    # ))
 
     return ld
