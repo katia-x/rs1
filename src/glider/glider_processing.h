@@ -49,51 +49,40 @@ enum class State
 class GliderProcessing
 {
 public:
-
   GliderProcessing(
     const Pose & home,
     const Pose & truck,
     double safe_height = 15.0,
-    double pickup_height = 0.5,
+    double pickup_height = 0.40,
     double align_height = 1.5,
     double xy_tolerance = 0.4,
     double z_tolerance = 0.15);
-  
-  // For getting and destroying poos
+
   bool isCarryingPoo() const;
   std::string currentModelName() const;
 
-  // Current Parrot position
   void setPose(const Pose & pose);
 
-  // Add one poo location to the mission queue
   void addPooGoal(const Goal & goal);
-
-  // Replace the whole poo mission queue
   void setPooGoals(const std::vector<Goal> & goals);
 
-  // Future downward sensor input
   void setHeightAbovePoo(double height);
   void clearHeightAbovePoo();
 
-  // Poo pose
   void setDetectedPooPose(const Pose & pose);
   void clearDetectedPooPose();
 
-  // Cube-centre request handshake (used during ALIGN)
   bool wantsCubeCentre() const;
   void markCubeCentreRequested() { cube_centre_requested_ = true; }
   void setCubeCentreUnavailable();
   void setAlignTolerance(double tol) { align_tolerance_ = tol; }
 
-  // Called at fixed rate
   std::pair<VelocityCommand, std::string> tick();
 
   State state() const { return state_; }
   bool carryingPoo() const { return carrying_poo_; }
 
 private:
-
   void handleStandby();
   void handleTakeoff();
   void handleGotoPoo();
@@ -103,26 +92,26 @@ private:
   void handlePickup();
   void handleAscend();
   void handleGoToTruck();
-  void handleReturnHome();
   void handleDropOff();
-  
+  void handleReturnHome();
 
   void transition(State new_state);
 
-  bool xyClose(
-    const Pose & a,
-    const Pose & b) const;
+  // ---- Reusable motion helpers ----
+  bool goToAltitude(double target_z);
+  bool goToXY(double x, double y);
+  bool goToSafeHeight();
+  bool descendToHeight(double target_height, bool check_obstacles);
 
-  double clamp(
-    double value,
-    double min,
-    double max) const;
+  bool xyClose(const Pose & a, const Pose & b) const;
+  double clamp(double value, double min, double max) const;
+  VelocityCommand positionControl(const Pose & target) const;
+  VelocityCommand worldToBody(const VelocityCommand & world_command) const;
+  Pose activeTargetXY() const;
 
-  VelocityCommand positionControl(
-    const Pose & target) const;
-
-  VelocityCommand worldToBody(
-    const VelocityCommand & world_command) const;
+  // Align helpers
+  void resetAlign();
+  void advanceAlignGridOrGiveUp();
 
   Pose home_;
   Pose truck_;
@@ -130,56 +119,59 @@ private:
   double safe_height_;
   double pickup_height_;
   double align_height_;
-  double dropoff_height_;
-
   double xy_tolerance_;
   double z_tolerance_;
 
-  // Controller limits
   double max_xy_speed_{1.0};
   double max_z_speed_{1.0};
-
-  // Proportional controller gains
   double kp_xy_{0.8};
   double kp_z_{0.8};
 
   State state_{State::STANDBY};
-
   Pose current_pose_;
 
   std::vector<Goal> goals_;
   std::size_t current_goal_idx_{0};
-
   bool carrying_poo_{false};
 
-  // Height sensor
   bool height_sensor_valid_{false};
   double height_above_poo_{0.0};
-
 
   bool detected_poo_valid_{false};
   Pose detected_poo_pose_;
 
-  // cube centre alignment
+  // Align
   enum class AlignPhase { WAIT_DETECTION, MOVE, WAIT_CHECK };
-  void resetAlign();
-
   AlignPhase align_phase_{AlignPhase::WAIT_DETECTION};
   bool cube_centre_requested_{false};
   bool new_detection_{false};
   int align_attempts_{0};
   int detection_failures_{0};
   int settle_ticks_{0};
-  double align_tolerance_{0.08};   // m, tight: the cube is only ~0.3 m wide
+  double align_tolerance_{0.08};
 
-  static constexpr int kSettleTicks = 20;          // ~1 s at 20 Hz control rate
-  static constexpr int kRequestTimeoutTicks = 60;  // ~3 s with no service reply
+  // 3x3 grid search (centre + 8 neighbours)
+  int align_grid_index_{0};
+  Pose align_grid_origin_{};
+  bool align_grid_origin_set_{false};
+
+  static constexpr int kSettleTicks = 20;
+  static constexpr int kRequestTimeoutTicks = 60;
   static constexpr int kMaxAttempts = 4;
   static constexpr int kMaxFailures = 5;
-  static constexpr double kAlignMaxSpeed = 0.4;    // m/s
+  static constexpr double kAlignMaxSpeed = 0.4;
+  static constexpr double kGridStep = 0.2;
+  // Order: +x, +x-y, -x, -x, +y, +y, +x, +x  → 8 outer cells of 3x3
+  static constexpr double kGridOffsetX[8] = {
+    +0.2, +0.2,  0.0, -0.2, -0.2, -0.2,  0.0, +0.2};
+  static constexpr double kGridOffsetY[8] = {
+     0.0, -0.2, -0.2, -0.2,  0.0, +0.2, +0.2, +0.2};
 
-  // poo helper
-  Pose activeTargetXY() const;
+  // Obstacle slide during first descend (±X / ±Y)
+  int slide_dir_{0};      // 0=+X, 1=-X, 2=+Y, 3=-Y (world)
+  int slide_ticks_{0};
+  static constexpr int kSlideTicksPerDir = 40;  // ~2 s at 20 Hz
+  static constexpr double kSlideSpeed = 0.25;
 
   VelocityCommand command_;
   std::string status_msg_;

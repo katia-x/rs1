@@ -1,11 +1,3 @@
-/*ToDO:
-Read from /glider/sensor (through glider node) & compute where to send glider 
-to line up with cube.
-
-maybe can add a stopping point @ around a few metres above poo? and run /glider/sonar
-as a Service instead of a topic. So not running & computing continuously?
-*/
-
 #include "glider_processing.h"
 
 #include <algorithm>
@@ -26,7 +18,6 @@ GliderProcessing::GliderProcessing(
   safe_height_(safe_height),
   pickup_height_(pickup_height),
   align_height_(align_height),
-  //dropoff_height_(truck.z), // add a little bit to this?
   xy_tolerance_(xy_tolerance),
   z_tolerance_(z_tolerance),
   current_pose_(home)
@@ -52,14 +43,6 @@ void GliderProcessing::setPose(const Pose & pose)
   current_pose_ = pose;
 }
 
-
-
-/*
- * Add a poo location to the mission.
- *
- * This is important because Mission will eventually be able
- * to send multiple poo locations.
- */
 void GliderProcessing::addPooGoal(const Goal & goal)
 {
   if (!goal.is_poo) {
@@ -68,26 +51,15 @@ void GliderProcessing::addPooGoal(const Goal & goal)
 
   goals_.push_back(goal);
 
-  // If we were waiting at the research facility,
-  // start the mission.
   if (state_ == State::STANDBY) {
     current_goal_idx_ = 0;
     transition(State::TAKEOFF);
   }
 }
 
-
-/*
- * Replace the current list of poo locations.
- *
- * This can be useful later if Mission sends the whole
- * mission list at once.
- */
-void GliderProcessing::setPooGoals(
-  const std::vector<Goal> & goals)
+void GliderProcessing::setPooGoals(const std::vector<Goal> & goals)
 {
   goals_.clear();
-
   for (const auto & goal : goals) {
     if (goal.is_poo) {
       goals_.push_back(goal);
@@ -101,10 +73,6 @@ void GliderProcessing::setPooGoals(
   }
 }
 
-
-/*
- * Receive the distance measured by a future downward sensor.
- */
 void GliderProcessing::setHeightAbovePoo(double height)
 {
   if (std::isfinite(height) && height >= 0.0) {
@@ -113,168 +81,176 @@ void GliderProcessing::setHeightAbovePoo(double height)
   }
 }
 
-
 void GliderProcessing::clearHeightAbovePoo()
 {
   height_sensor_valid_ = false;
 }
 
-
-/*
- * Main processing loop.
- *
- * This contains the state machine for the entire Glider mission.
- */
 std::pair<VelocityCommand, std::string>
 GliderProcessing::tick()
 {
   command_ = VelocityCommand{};
 
   switch (state_) {
-
-    case State::STANDBY:
-      handleStandby();
-      break;
-
-    case State::TAKEOFF:
-      handleTakeoff();
-      break;
-
-    case State::GOTO_POO:
-      handleGotoPoo();
-      break;
-
-    case State::DESCEND:
-      handleDescend();
-      break;
-
-    case State::ALIGN:
-      handleAlign();
-      break;
-
-    case State::FINAL_DESCEND:
-      handleFinalDescend();
-      break;
-
-    case State::PICKUP:
-      handlePickup();
-      break;
-
-    case State::ASCEND:
-      handleAscend();
-      break;
-
-    case State::GOTO_TRUCK:
-      handleGoToTruck();
-      break;
-
-    case State::DROP_OFF:
-      handleDropOff();
-      break;
-
-    case State::RETURN_HOME:
-      handleReturnHome();
-      break;
+    case State::STANDBY:       handleStandby();       break;
+    case State::TAKEOFF:       handleTakeoff();       break;
+    case State::GOTO_POO:      handleGotoPoo();       break;
+    case State::DESCEND:       handleDescend();       break;
+    case State::ALIGN:         handleAlign();         break;
+    case State::FINAL_DESCEND: handleFinalDescend();  break;
+    case State::PICKUP:        handlePickup();        break;
+    case State::ASCEND:        handleAscend();        break;
+    case State::GOTO_TRUCK:    handleGoToTruck();     break;
+    case State::DROP_OFF:      handleDropOff();       break;
+    case State::RETURN_HOME:   handleReturnHome();    break;
   }
 
   return {command_, status_msg_};
 }
 
+// ---------------------------------------------------------------------------
+// Reusable motion helpers
+// ---------------------------------------------------------------------------
 
-/*
- * ---------------------------------------------------------
- * STANDBY
- * ---------------------------------------------------------
- *
- * Glider remains at the research facility.
- */
+bool GliderProcessing::goToAltitude(double target_z)
+{
+  const double z_error = target_z - current_pose_.z;
+  command_.vz = clamp(kp_z_ * z_error, -max_z_speed_, max_z_speed_);
+
+  if (std::abs(z_error) <= z_tolerance_) {
+    command_.vz = 0.0;
+    return true;
+  }
+  return false;
+}
+
+bool GliderProcessing::goToXY(double x, double y)
+{
+  Pose target;
+  target.x = x;
+  target.y = y;
+  target.z = current_pose_.z;
+
+  command_ = positionControl(target);
+  command_.vz = 0.0;
+
+  return xyClose(current_pose_, target);
+}
+
+bool GliderProcessing::goToSafeHeight()
+{
+  return goToAltitude(safe_height_);
+}
+
+bool GliderProcessing::descendToHeight(double target_height, bool check_obstacles)
+{
+  // Hold / correct XY toward active target
+  const Pose xy = activeTargetXY();
+  command_.vx = clamp(kp_xy_ * (xy.x - current_pose_.x), -max_xy_speed_, max_xy_speed_);
+  command_.vy = clamp(kp_xy_ * (xy.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
+
+  if (!height_sensor_valid_) {
+    // Odometry fallback
+    double ref_z = current_pose_.z;
+    if (current_goal_idx_ < goals_.size()) {
+      ref_z = goals_[current_goal_idx_].pose.z + target_height;
+    }
+    const double z_error = ref_z - current_pose_.z;
+    command_.vz = clamp(kp_z_ * z_error, -max_z_speed_, max_z_speed_);
+
+    if (current_pose_.z < 0.35 && command_.vz < 0.0) {
+      command_.vz = 0.0;
+      command_ = worldToBody(command_);
+      return true;
+    }
+
+    if (std::abs(z_error) <= z_tolerance_) {
+      command_.vz = 0.0;
+      command_ = worldToBody(command_);
+      return true;
+    }
+
+    command_ = worldToBody(command_);
+    return false;
+  }
+
+  // Obstacle gate: something closer than the height we want to stop at
+  if (check_obstacles &&
+      height_above_poo_ < target_height - z_tolerance_)
+  {
+    // Cycle ±X / ±Y in world frame
+    static const double dir_x[4] = {+1.0, -1.0, 0.0, 0.0};
+    static const double dir_y[4] = {0.0, 0.0, +1.0, -1.0};
+
+    command_.vx = kSlideSpeed * dir_x[slide_dir_];
+    command_.vy = kSlideSpeed * dir_y[slide_dir_];
+    command_.vz = 0.0;
+
+    ++slide_ticks_;
+    if (slide_ticks_ >= kSlideTicksPerDir) {
+      slide_ticks_ = 0;
+      slide_dir_ = (slide_dir_ + 1) % 4;
+    }
+
+    status_msg_ = "DESCEND: obstacle below, sliding clear";
+    command_ = worldToBody(command_);
+    return false;
+  }
+
+  // Path is clear (or no obstacle check) → normal sensor descent
+  slide_ticks_ = 0;  // reset slide state once clear
+
+  const double height_error = target_height - height_above_poo_;
+  command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+
+  if (current_pose_.z < 0.35 && command_.vz < 0.0) {
+    command_.vz = 0.0;
+    command_ = worldToBody(command_);
+    return true;
+  }
+
+  if (std::abs(height_error) <= z_tolerance_) {
+    command_.vz = 0.0;
+    command_ = worldToBody(command_);
+    return true;
+  }
+
+  command_ = worldToBody(command_);
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// State handlers
+// ---------------------------------------------------------------------------
+
 void GliderProcessing::handleStandby()
 {
   command_ = VelocityCommand{};
-
-  status_msg_ =
-    "STANDBY: at research facility";
+  status_msg_ = "STANDBY: at research facility";
 }
 
-
-/*
- * ---------------------------------------------------------
- * TAKEOFF
- * ---------------------------------------------------------
- *
- * Fly vertically to the safe height above the trees.
- */
 void GliderProcessing::handleTakeoff()
 {
-  const double z_error =
-    safe_height_ - current_pose_.z;
-
-  command_.vz =
-    clamp(
-      kp_z_ * z_error,
-      -max_z_speed_,
-      max_z_speed_);
-
-  status_msg_ =
-    "TAKEOFF: climbing to safe height";
-
-  if (std::abs(z_error) <= z_tolerance_) {
-
-    command_.vz = 0.0;
-
+  status_msg_ = "TAKEOFF: climbing to safe height";
+  if (goToSafeHeight()) {
     transition(State::GOTO_POO);
   }
 }
 
-
-/*
- * ---------------------------------------------------------
- * GOTO POO
- * ---------------------------------------------------------
- *
- * Fly horizontally to the poo location while remaining
- * at the safe height.
- */
 void GliderProcessing::handleGotoPoo()
 {
   if (current_goal_idx_ >= goals_.size()) {
-
     transition(State::RETURN_HOME);
-
     return;
   }
 
-  const Goal & goal =
-    goals_[current_goal_idx_];
+  const Goal & goal = goals_[current_goal_idx_];
+  status_msg_ = "GOTO_POO: flying above poo location";
 
-  Pose target = goal.pose;
-
-  // Stay at safe height.
-  target.z = safe_height_;
-
-  command_ =
-    positionControl(target);
-
-  command_.vz = 0.0;
-
-  status_msg_ =
-    "GOTO_POO: flying above poo location";
-
-  if (xyClose(current_pose_, target)) {
-
-    command_.vx = 0.0;
-    command_.vy = 0.0;
-
+  if (goToXY(goal.pose.x, goal.pose.y)) {
     transition(State::DESCEND);
   }
 }
-
-
-/*
- * ---------------------------------------------------------
- * DESCEND
- * ---------------------------------------------------------
- */
 
 void GliderProcessing::handleDescend()
 {
@@ -283,45 +259,12 @@ void GliderProcessing::handleDescend()
     return;
   }
 
-  Pose xy_target = activeTargetXY();
-  command_.vx = clamp(kp_xy_ * (xy_target.x - current_pose_.x), -max_xy_speed_, max_xy_speed_);
-  command_.vy = clamp(kp_xy_ * (xy_target.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
-
-  // if (height_sensor_valid_) {
-  //   const double height_error = height_above_poo_ - align_height_;
-  //   command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-  //   status_msg_ = "DESCEND: sensor → align height";
-
-  //   if (std::abs(height_error) <= z_tolerance_) {
-  //     command_.vz = 0.0;
-  //     transition(State::ALIGN);
-  //   }
-  // } else {
-  // odometry fallback (same idea as before)
-    const Goal & goal = goals_[current_goal_idx_];
-    const double target_z = goal.pose.z + align_height_;
-    const double height_error = target_z - current_pose_.z;
-    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-    status_msg_ = "DESCEND: odometry fallback → align height";
-  // Safety floor
-    if (current_pose_.z < 0.4 /*&& command_.vz < 0.0*/) {
-      command_.vz = 0.0;
-    }
-    if (std::abs(height_error) <= z_tolerance_) {
-      command_.vz = 0.0;
-      transition(State::ALIGN);
-    }
-  //}
-  
-
-  command_ = worldToBody(command_);
+  status_msg_ = "DESCEND: to align height";
+  if (descendToHeight(align_height_, /*check_obstacles=*/true)) {
+    transition(State::ALIGN);
+  }
 }
 
-/*
- * ---------------------------------------------------------
- * ALIGN
- * ---------------------------------------------------------
- */
 void GliderProcessing::handleAlign()
 {
   if (current_goal_idx_ >= goals_.size()) {
@@ -329,7 +272,6 @@ void GliderProcessing::handleAlign()
     return;
   }
 
-  // x/y only during ALIGN. command_ starts zeroed each tick, so waiting = hovering.
   command_.vz = 0.0;
 
   switch (align_phase_) {
@@ -339,22 +281,20 @@ void GliderProcessing::handleAlign()
       ++settle_ticks_;
       const bool checking = (align_phase_ == AlignPhase::WAIT_CHECK);
 
-      // A request went out but no reply came back: count it as a failure.
       if (cube_centre_requested_ &&
-        settle_ticks_ > kSettleTicks + kRequestTimeoutTicks)
+          settle_ticks_ > kSettleTicks + kRequestTimeoutTicks)
       {
         setCubeCentreUnavailable();
       }
 
-      // Cube repeatedly not visible: give up and retry the approach from safe height.
       if (detection_failures_ >= kMaxFailures) {
-        status_msg_ = "ALIGN: cube not found, retrying approach";
-        transition(State::TAKEOFF);
+        advanceAlignGridOrGiveUp();
         return;
       }
 
       if (!new_detection_) {
-        status_msg_ = checking ? "ALIGN: verifying centre" : "ALIGN: waiting for cube centre";
+        status_msg_ = checking ? "ALIGN: verifying centre"
+                               : "ALIGN: waiting for cube centre";
         return;
       }
 
@@ -364,15 +304,13 @@ void GliderProcessing::handleAlign()
         detected_poo_pose_.y - current_pose_.y);
 
       if (checking) {
-        // Second reading: are we actually over the centre?
         if (dist <= 1.5 * align_tolerance_) {
           status_msg_ = "ALIGN: centred, descending to pick up";
           transition(State::FINAL_DESCEND);
           return;
         }
         if (++align_attempts_ >= kMaxAttempts) {
-          status_msg_ = "ALIGN: could not centre, retrying approach";
-          transition(State::TAKEOFF);
+          advanceAlignGridOrGiveUp();
           return;
         }
       }
@@ -388,11 +326,12 @@ void GliderProcessing::handleAlign()
       const double dist = std::hypot(ex, ey);
 
       if (dist <= align_tolerance_) {
+        // Arrived at cell / cube estimate → settle and re-query sonar
         align_phase_ = AlignPhase::WAIT_CHECK;
         settle_ticks_ = 0;
         cube_centre_requested_ = false;
         new_detection_ = false;
-        status_msg_ = "ALIGN: over cube, settling";
+        status_msg_ = "ALIGN: over target, settling";
         return;
       }
 
@@ -404,14 +343,9 @@ void GliderProcessing::handleAlign()
     }
   }
 
-  command_ = worldToBody(command_);   
+  command_ = worldToBody(command_);
 }
 
-/*
- * ---------------------------------------------------------
- * Final Descend
- * ---------------------------------------------------------
- */
 void GliderProcessing::handleFinalDescend()
 {
   if (current_goal_idx_ >= goals_.size()) {
@@ -419,294 +353,179 @@ void GliderProcessing::handleFinalDescend()
     return;
   }
 
-  Pose xy_target = activeTargetXY();
-  command_.vx = clamp(kp_xy_ * (xy_target.x - current_pose_.x), -max_xy_speed_, max_xy_speed_);
-  command_.vy = clamp(kp_xy_ * (xy_target.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
-
-  if (height_sensor_valid_) {
-    const double height_error = pickup_height_ - height_above_poo_;
-    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-    status_msg_ = "FINAL DESCEND: sensor → pickup height";
-
-    if (std::abs(height_error) <= z_tolerance_) {
-      command_.vz = 0.0;
-      transition(State::PICKUP);
-    }
-  } else {
-    //odometry fallback 
-    const Goal & goal = goals_[current_goal_idx_];
-    const double target_z = goal.pose.z + pickup_height_;
-    const double height_error = target_z - current_pose_.z;
-    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-    status_msg_ = "FINAL DESCEND: odometry fallback → pickup height";
-
-    if (std::abs(height_error) <= z_tolerance_) {
-    command_.vz = 0.0;
+  status_msg_ = "FINAL DESCEND: sensor → pickup height";
+  if (descendToHeight(pickup_height_, /*check_obstacles=*/false)) {
     transition(State::PICKUP);
-    }
   }
-    if (current_pose_.z < 0.35 && command_.vz < 0.0) {
-    command_.vz = 0.0;
-      transition(State::PICKUP);
-    }
-
-  
-
-  command_ = worldToBody(command_);
 }
 
-
-/*
- * ---------------------------------------------------------
- * PICKUP
- * ---------------------------------------------------------
- *
- * There is currently no physical gripper in RS1.
- *
- * Therefore reaching the pickup height is treated as a
- * successful pickup for now.
- */
 void GliderProcessing::handlePickup()
 {
   command_ = VelocityCommand{};
-
   carrying_poo_ = true;
   clearDetectedPooPose();
-
-  status_msg_ =
-    "PICKUP: poo collected";
-
+  status_msg_ = "PICKUP: poo collected";
   transition(State::ASCEND);
 }
 
-
-/*
- * ---------------------------------------------------------
- * ASCEND
- * ---------------------------------------------------------
- *
- * Return vertically to the safe height.
- */
 void GliderProcessing::handleAscend()
 {
-  const double z_error =
-    safe_height_ - current_pose_.z;
-
-  command_.vz =
-    clamp(
-      kp_z_ * z_error,
-      -max_z_speed_,
-      max_z_speed_);
-
-  status_msg_ =
-    "ASCEND: returning to safe height";
-
-  if (std::abs(z_error) <= z_tolerance_) {
-
-    command_.vz = 0.0;
-
-    transition(State::GOTO_TRUCK);
+  status_msg_ = "ASCEND: returning to safe height";
+  if (goToSafeHeight()) {
+    // Carrying → truck; not carrying (e.g. align gave up) → home
+    if (carrying_poo_) {
+      transition(State::GOTO_TRUCK);
+    } else {
+      transition(State::RETURN_HOME);
+    }
   }
 }
 
-
-/*
- * ---------------------------------------------------------
- * RETURN TO TRUCK
- * ---------------------------------------------------------
- *
- * Fly horizontally back to the research facility.
- */
 void GliderProcessing::handleGoToTruck()
 {
-
-  Pose target = truck_;
-  target.z = safe_height_;
-
-  command_ =
-    positionControl(target);
-
-  command_.vz = 0.0;
-
-  status_msg_ =
-    "GOTO_TRUCK: returning to research facility";
-
-  if (xyClose(current_pose_, target)) {
-
-    command_.vx = 0.0;
-    command_.vy = 0.0;
-
+  status_msg_ = "GOTO_TRUCK: returning to research facility";
+  if (goToXY(truck_.x, truck_.y)) {
     transition(State::DROP_OFF);
   }
 }
 
-
-/*
- * ---------------------------------------------------------
- * DROP OFF
- * ---------------------------------------------------------
- *
- * Descend to the research facility drop-off height.
- */
 void GliderProcessing::handleDropOff()
 {
-
-  Pose target = truck_;
-  command_.vx = 0.0;
-  command_.vy = 0.0;
-    const double height_error = target.z - current_pose_.z;
-    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-    status_msg_ = "DESCEND: odometry fallback → align height";
-
-    if (std::abs(height_error) <= z_tolerance_) {
-      command_.vz = 0.0;
-      carrying_poo_ = false;
-      current_goal_idx_++;
-        transition(State::RETURN_HOME);
-    }
-  //}
-  
-
-  command_ = worldToBody(command_);
+  status_msg_ = "DROP_OFF: descending to truck";
+  // No obstacle check; truck deck height from odometry
+  if (goToAltitude(truck_.z)) {
+    carrying_poo_ = false;
+    current_goal_idx_++;
+    transition(State::RETURN_HOME);
+  }
 }
 
 void GliderProcessing::handleReturnHome()
 {
-  /*
-    * More poo locations remain.
-    */
+  // More poos left → take off again for the next one
   if (current_goal_idx_ < goals_.size()) {
-
     transition(State::TAKEOFF);
+    return;
   }
 
-  Pose target = home_;
+  status_msg_ = "RETURN_HOME: returning to research facility";
 
-  //target.z = safe_height_;
+  if (!xyClose(current_pose_, home_)) {
+    goToXY(home_.x, home_.y);
+    return;
+  }
 
-  command_ =
-    positionControl(target);
-
-
-  status_msg_ =
-    "RETURN_HOME: returning to research facility";
-
-  if (xyClose(current_pose_, target)) {
-
-    command_.vx = 0.0;
-    command_.vy = 0.0;
-
-    const double height_error = target.z - current_pose_.z;
-    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-
-    if (std::abs(height_error) <= z_tolerance_) {
-      command_.vz = 0.0;
-      goals_.clear();
-      current_goal_idx_ = 0;
-      transition(State::STANDBY);
-    }
+  // XY at home → settle in Z
+  if (goToAltitude(home_.z)) {
+    goals_.clear();
+    current_goal_idx_ = 0;
+    transition(State::STANDBY);
   }
 }
 
+// ---------------------------------------------------------------------------
+// Align grid search
+// ---------------------------------------------------------------------------
 
+void GliderProcessing::advanceAlignGridOrGiveUp()
+{
+  if (!align_grid_origin_set_) {
+    align_grid_origin_.x = current_pose_.x;
+    align_grid_origin_.y = current_pose_.y;
+    align_grid_origin_set_ = true;
+    align_grid_index_ = 0;
+  }
 
-/*
- * Change state.
- */
+  if (align_grid_index_ >= 8) {
+    // Grid exhausted → climb then home (not carrying)
+    status_msg_ = "ALIGN: grid exhausted, returning home";
+    carrying_poo_ = false;
+    clearDetectedPooPose();
+    goals_.clear();
+    current_goal_idx_ = 0;
+    transition(State::ASCEND);
+    return;
+  }
+
+  const double tx = align_grid_origin_.x + kGridOffsetX[align_grid_index_];
+  const double ty = align_grid_origin_.y + kGridOffsetY[align_grid_index_];
+  ++align_grid_index_;
+
+  // Fly to next grid cell, then re-query sonar
+  detected_poo_pose_.x = tx;
+  detected_poo_pose_.y = ty;
+  detected_poo_valid_ = true;
+  new_detection_ = false;
+  cube_centre_requested_ = false;
+  detection_failures_ = 0;
+  align_attempts_ = 0;
+  settle_ticks_ = 0;
+  align_phase_ = AlignPhase::MOVE;
+  status_msg_ = "ALIGN: grid search next cell";
+}
+
+void GliderProcessing::resetAlign()
+{
+  align_phase_ = AlignPhase::WAIT_DETECTION;
+  cube_centre_requested_ = false;
+  new_detection_ = false;
+  align_attempts_ = 0;
+  detection_failures_ = 0;
+  settle_ticks_ = 0;
+  detected_poo_valid_ = false;
+  align_grid_index_ = 0;
+  align_grid_origin_set_ = false;
+}
+
+// ---------------------------------------------------------------------------
+// Misc
+// ---------------------------------------------------------------------------
+
 void GliderProcessing::transition(State new_state)
 {
   if (new_state == State::ALIGN) {
     resetAlign();
   }
+  if (new_state == State::DESCEND) {
+    slide_dir_ = 0;
+    slide_ticks_ = 0;
+  }
   state_ = new_state;
 }
 
-
-/*
- * Check whether two positions are sufficiently close
- * horizontally.
- */
-bool GliderProcessing::xyClose(
-  const Pose & a,
-  const Pose & b) const
+bool GliderProcessing::xyClose(const Pose & a, const Pose & b) const
 {
-  return std::hypot(
-    a.x - b.x,
-    a.y - b.y) <= xy_tolerance_;
+  return std::hypot(a.x - b.x, a.y - b.y) <= xy_tolerance_;
 }
 
-
-/*
- * Limit a value to a specified range.
- */
-double GliderProcessing::clamp(
-  double value,
-  double min,
-  double max) const
+double GliderProcessing::clamp(double value, double min, double max) const
 {
-  return std::max(
-    min,
-    std::min(value, max));
+  return std::max(min, std::min(value, max));
 }
 
-
-/*
- * Simple proportional position controller.
- *
- * The errors are initially calculated in world coordinates.
- */
-VelocityCommand GliderProcessing::positionControl(
-  const Pose & target) const
+VelocityCommand GliderProcessing::positionControl(const Pose & target) const
 {
   VelocityCommand command;
 
-  const double x_error =
-    target.x - current_pose_.x;
+  const double x_error = target.x - current_pose_.x;
+  const double y_error = target.y - current_pose_.y;
 
-  const double y_error =
-    target.y - current_pose_.y;
-
-  command.vx =
-    clamp(
-      kp_xy_ * x_error,
-      -max_xy_speed_,
-      max_xy_speed_);
-
-  command.vy =
-    clamp(
-      kp_xy_ * y_error,
-      -max_xy_speed_,
-      max_xy_speed_);
+  command.vx = clamp(kp_xy_ * x_error, -max_xy_speed_, max_xy_speed_);
+  command.vy = clamp(kp_xy_ * y_error, -max_xy_speed_, max_xy_speed_);
 
   return worldToBody(command);
 }
 
-
-/*
- * Convert world-frame XY velocity to body-frame XY velocity.
- *
- * This is the important part that allows the controller
- * to work regardless of the Parrot's yaw.
- */
 VelocityCommand GliderProcessing::worldToBody(
   const VelocityCommand & world_command) const
 {
-  VelocityCommand body_command =
-    world_command;
+  VelocityCommand body_command = world_command;
 
-  const double c =
-    std::cos(current_pose_.yaw);
+  const double c = std::cos(current_pose_.yaw);
+  const double s = std::sin(current_pose_.yaw);
 
-  const double s =
-    std::sin(current_pose_.yaw);
-
-  body_command.vx =
-    c * world_command.vx +
-    s * world_command.vy;
-
-  body_command.vy =
-    -s * world_command.vx +
-    c * world_command.vy;
+  body_command.vx =  c * world_command.vx + s * world_command.vy;
+  body_command.vy = -s * world_command.vx + c * world_command.vy;
 
   return body_command;
 }
@@ -730,7 +549,7 @@ Pose GliderProcessing::activeTargetXY() const
 void GliderProcessing::setDetectedPooPose(const Pose & pose)
 {
   if (state_ != State::ALIGN) {
-    return;  // late reply after we've moved on
+    return;
   }
   detected_poo_pose_ = pose;
   detected_poo_valid_ = true;
@@ -743,7 +562,7 @@ void GliderProcessing::setCubeCentreUnavailable()
 {
   cube_centre_requested_ = false;
   ++detection_failures_;
-  settle_ticks_ = 0;   // wait again before retrying
+  settle_ticks_ = 0;
 }
 
 bool GliderProcessing::wantsCubeCentre() const
@@ -753,17 +572,6 @@ bool GliderProcessing::wantsCubeCentre() const
          !cube_centre_requested_ &&
          !new_detection_ &&
          settle_ticks_ >= kSettleTicks;
-}
-
-void GliderProcessing::resetAlign()
-{
-  align_phase_ = AlignPhase::WAIT_DETECTION;
-  cube_centre_requested_ = false;
-  new_detection_ = false;
-  align_attempts_ = 0;
-  detection_failures_ = 0;
-  settle_ticks_ = 0;
-  detected_poo_valid_ = false;
 }
 
 void GliderProcessing::clearDetectedPooPose()
