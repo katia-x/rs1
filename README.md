@@ -5,7 +5,7 @@ Robot for identification and removal of invasive plant species from struggling A
 ROS 2 husky robot which navigates through a Gazebo simulation environment of bushland, identifying and removing invasive and harmful weed species to assist with environmental regeneration.
 
 ## Package setup
-You will need to install Foxglove to use GUI
+You will need the Foxglove bridge and a Foxglove client to use the GUI.
 
 ```bash
 sudo apt update
@@ -27,7 +27,7 @@ source install/setup.bash
 ros2 launch rs1 rs1_demo.launch.py rviz:=true
 ```
 
-To run the GUI, in another window run
+To run the bridge, in another window run:
 ```bash
 ros2 launch foxglove_bridge foxglove_bridge_launch.xml   port:=8765   use_sim_time:=true
 ```
