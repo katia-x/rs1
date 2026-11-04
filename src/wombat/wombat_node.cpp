@@ -10,14 +10,18 @@ using GoalRequest = rs1::srv::WombatNextGoal::Request;
 WombatNode::WombatNode()
 : Node("wombat_node"),
   global_frame_(declare_parameter("global_frame", "map")),
-  lane_start_wait_duration_(declare_parameter("lane_start_wait_duration", 2.0)),
-  max_goal_retries_(declare_parameter("max_goal_retries", 3))
+  lane_start_wait_duration_(declare_parameter("lane_start_wait_duration", 1.0)),
+  max_goal_retries_(declare_parameter("max_goal_retries", 3)),
+  nav_unavailable_timeout_(declare_parameter("nav_unavailable_timeout", 60.0))
 {
 	if (!std::isfinite(lane_start_wait_duration_) || lane_start_wait_duration_ < 0.0) {
 		throw std::invalid_argument("lane_start_wait_duration must be finite and non-negative");
 	}
 	if (max_goal_retries_ < 0) {
 		throw std::invalid_argument("max_goal_retries must be non-negative");
+	}
+	if (!std::isfinite(nav_unavailable_timeout_) || nav_unavailable_timeout_ <= 0.0) {
+		throw std::invalid_argument("nav_unavailable_timeout must be finite and positive");
 	}
 	// Override topics for manual control
 	const auto override_command_topic = declare_parameter<std::string>(
@@ -46,7 +50,34 @@ WombatNode::WombatNode()
 
 void WombatNode::timer_callback()
 {
-	if (manual_override_ || mission_request_in_flight_ || nav_goal_request_in_flight_ || nav_cancel_in_flight_) { return; }
+	if (mission_stopped()) {
+		return;
+	}
+
+	if (manual_override_ || mission_request_in_flight_ || nav_goal_request_in_flight_ || nav_cancel_in_flight_) {
+		return;
+	}
+
+	// Keep the saved goal and deadline intact while waiting, even if new weeds arrive.
+	if (nav_unavailable) {
+		const auto elapsed = std::chrono::duration<double>(
+			std::chrono::steady_clock::now() - nav_unavailable_since_);
+
+		if (elapsed.count() >= nav_unavailable_timeout_) {
+			abort_mission();
+			return;
+		}
+
+		if (last_navigation_goal_valid_ && navigation_client_->action_server_is_ready()) {
+			send_navigation_goal(
+				last_navigation_goal_,
+				last_goal_is_weed_,
+				last_weed_id_);
+		}
+
+		return;
+	}
+
 	if (pending_weed_goal_.pending && state_ == State::Searching) {
 		if (canceling_goal_) { return; }
 		if (active_goal_) {
@@ -65,6 +96,7 @@ void WombatNode::timer_callback()
 
 	switch (state_) {
 	case State::Complete:
+	case State::Abort:
 		return;
 	case State::PreLaneWait:
 		if (std::chrono::steady_clock::now() < lane_wait_until_) { return; }
@@ -84,7 +116,11 @@ void WombatNode::timer_callback()
 	default:
 		break;
 	}
-	if (!pending_request_.pending) { return; }
+
+	if (!pending_request_.pending) {
+		return;
+	}
+
 	request_next_goal(pending_request_.operation, pending_request_.weed_id);
 }
 
@@ -97,6 +133,9 @@ void WombatNode::queue_request(std::uint8_t operation, std::uint64_t weed_id)
 
 void WombatNode::request_next_goal(std::uint8_t operation, std::uint64_t weed_id)
 {
+	if (mission_stopped()) {
+		return;
+	}
 	if (active_goal_ || mission_request_in_flight_ || nav_goal_request_in_flight_) { return; }
 	if (!mission_client_->wait_for_service(1s)) {
 		RCLCPP_WARN(get_logger(), "Mission service is not available yet");
@@ -115,7 +154,7 @@ void WombatNode::request_next_goal(std::uint8_t operation, std::uint64_t weed_id
 
 void WombatNode::weed_goal_callback(const rs1::msg::WombatWeedGoal::SharedPtr message)
 {
-	if (state_ == State::Complete || message->mission_generation < mission_generation_) {
+	if (mission_stopped() || message->mission_generation < mission_generation_) {
 		return;
 	}
 	if (message->mission_generation > mission_generation_) {
@@ -148,7 +187,7 @@ void WombatNode::weed_goal_callback(const rs1::msg::WombatWeedGoal::SharedPtr me
 
 void WombatNode::dispatch_pending_weed_goal()
 {
-	if (state_ == State::Complete || !pending_weed_goal_.pending || active_goal_ || nav_cancel_in_flight_) {
+	if (mission_stopped() || !pending_weed_goal_.pending || active_goal_ || nav_cancel_in_flight_) {
 		return;
 	}
 	const auto weed_goal = pending_weed_goal_.goal;
@@ -179,6 +218,9 @@ void WombatNode::complete_mission()
 		navigation_client_->async_cancel_goal(active_goal_);
 		active_goal_.reset();
 	}
+
+	nav_unavailable = false;
+	nav_unavailable_since_ = {};
 	canceling_goal_.reset();
 	nav_cancel_in_flight_ = false;
 	state_ = State::Complete;
@@ -193,7 +235,7 @@ void WombatNode::status_callback(const rs1::msg::WombatStatus::SharedPtr message
 		mission_generation_ = message->mission_generation;
 		reset_for_new_region();
 	}
-	if (message->mission_complete) {
+	if (message->mission_complete && !mission_stopped()) {
 		complete_mission();
 	}
 }
@@ -204,6 +246,9 @@ void WombatNode::reset_for_new_region()
 		navigation_client_->async_cancel_goal(active_goal_);
 		active_goal_.reset();
 	}
+
+	nav_unavailable = false;
+	nav_unavailable_since_ = {};
 	canceling_goal_.reset();
 	nav_cancel_in_flight_ = false;
 	pending_weed_goal_.pending = false;
@@ -219,25 +264,42 @@ void WombatNode::reset_for_new_region()
 void WombatNode::send_navigation_goal(
 	const geometry_msgs::msg::PoseStamped & pose, bool is_weed, std::uint64_t weed_id)
 {
+	if (mission_stopped()) {
+		return;
+	}
+
 	NavigateToPose::Goal goal;
 	goal.pose = pose;
 	goal.pose.header.frame_id = goal.pose.header.frame_id.empty() ? global_frame_ : goal.pose.header.frame_id;
 	goal.pose.header.stamp = now();
 	last_goal_is_weed_ = is_weed;
-	if (is_weed) { last_weed_id_ = weed_id; }
+
+	if (is_weed) {
+		last_weed_id_ = weed_id;
+	}
+
 	last_navigation_goal_ = goal.pose;
 	last_navigation_goal_valid_ = true;
-	if (!navigation_client_->wait_for_action_server(2s)) {
-		RCLCPP_WARN(get_logger(), "Nav2 NavigateToPose action is not available yet");
-		state_ = State::Recovery;
-		handle_nav_failure();
+
+	if (!navigation_client_->action_server_is_ready()) {
+		if (!nav_unavailable) {
+			nav_unavailable_since_ = std::chrono::steady_clock::now();
+			RCLCPP_WARN(
+				get_logger(), "Waiting up to %.1f seconds for Nav2 action server",
+				nav_unavailable_timeout_);
+		}
+		nav_unavailable = true;
 		return;
 	}
+
+	nav_unavailable = false;
+	nav_unavailable_since_ = {};
+
 	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
 	const auto goal_generation = mission_generation_;
 	options.goal_response_callback =
 		[this, goal_generation](NavigateGoalHandle::SharedPtr goal_handle) {
-			if (goal_generation != mission_generation_ || state_ == State::Complete) {
+			if (goal_generation != mission_generation_ || mission_stopped()) {
 				nav_goal_request_in_flight_ = false;
 				if (goal_handle) { navigation_client_->async_cancel_goal(goal_handle); }
 				return;
@@ -246,7 +308,7 @@ void WombatNode::send_navigation_goal(
 		};
 	options.result_callback =
 		[this, goal_generation](const NavigateGoalHandle::WrappedResult & result) {
-			if (goal_generation == mission_generation_ && state_ != State::Complete) {
+			if (goal_generation == mission_generation_ && !mission_stopped()) {
 				handle_nav_result(result);
 			}
 		};
@@ -257,10 +319,13 @@ void WombatNode::send_navigation_goal(
 void WombatNode::handle_mission_goal(
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future)
 {
+	mission_request_in_flight_ = false;
+	if (mission_stopped() || mission_request_generation_ != mission_generation_) {
+		return;
+	}
+
 	try {
 		auto response = future.get();
-		mission_request_in_flight_ = false;
-		if (mission_request_generation_ != mission_generation_) { return; }
 		if (response->mission_complete) {
 			complete_mission();
 			return;
@@ -324,7 +389,7 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 		canceling_goal_.reset();
 		RCLCPP_INFO(get_logger(), "Canceled navigation goal finished with result_code=%d",
 			static_cast<int>(result.code));
-		if (state_ != State::Complete) { dispatch_pending_weed_goal(); }
+		if (!mission_stopped()) { dispatch_pending_weed_goal(); }
 		return;
 	}
 	if (nav_cancel_in_flight_) { return; }
@@ -378,6 +443,24 @@ void WombatNode::handle_nav_failure()
 	} else {
 		queue_request(GoalRequest::SKIP_CURRENT_GOAL);
 	}
+}
+
+bool WombatNode::mission_stopped() const
+{
+	return state_ == State::Complete || state_ == State::Abort;
+}
+
+void WombatNode::abort_mission()
+{
+	// Reuse cancellation and pending-request cleanup without reporting success.
+	complete_mission();
+
+	last_navigation_goal_valid_ = false;
+	state_ = State::Abort;
+
+	RCLCPP_ERROR(
+		get_logger(), "Mission aborted: Nav2 unavailable for %.1f seconds",
+		nav_unavailable_timeout_);
 }
 
 void WombatNode::override_callback(const std_msgs::msg::Bool::ConstSharedPtr message)

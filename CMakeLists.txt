@@ -30,8 +30,11 @@ rosidl_generate_interfaces(${PROJECT_NAME}
 
 add_executable(mission_node src/main.cpp src/mission_node.cpp src/mission_processing.cpp)
 target_compile_features(mission_node PRIVATE cxx_std_17)
+target_include_directories(mission_node PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(mission_node ${OpenCV_LIBS})
 ament_target_dependencies(
   mission_node
+  cv_bridge
   geometry_msgs
   rclcpp
   rcl_interfaces
@@ -79,9 +82,12 @@ if(BUILD_TESTING)
   )
   if(TARGET mission_processing_test)
     target_compile_features(mission_processing_test PRIVATE cxx_std_17)
-    ament_target_dependencies(mission_processing_test geometry_msgs rclcpp sensor_msgs vision_msgs tf2 tf2_geometry_msgs tf2_ros)
+    ament_target_dependencies(mission_processing_test cv_bridge geometry_msgs rclcpp sensor_msgs vision_msgs tf2 tf2_geometry_msgs tf2_ros)
+    target_include_directories(mission_processing_test PRIVATE ${OpenCV_INCLUDE_DIRS})
+    target_link_libraries(mission_processing_test ${OpenCV_LIBS})
     target_include_directories(mission_processing_test PRIVATE src)
   endif()
+
   ament_add_test(weed_target_integration
     COMMAND "${Python3_EXECUTABLE}" "${CMAKE_CURRENT_SOURCE_DIR}/test/weed_target_integration.py"
       "$<TARGET_FILE:mission_node>" "${CMAKE_CURRENT_SOURCE_DIR}/config/mission_params.yaml"
