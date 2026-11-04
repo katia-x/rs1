@@ -1,4 +1,3 @@
-- chat with kat about maybe doing teleop for alignment instead of using rgbd camera
-- potentially use lidar for pickup
-- change poo dropoff to be a little more randomised instead of stacking perfectly
-
+- change glider align heigh to lower and test
+- intergrate into main
+- if have time maybe teleop for if glider cant get to poo?
