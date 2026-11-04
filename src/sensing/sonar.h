@@ -20,10 +20,10 @@ private:
 
   std::string cloud_topic_;
   double max_lateral_distance_{1.0};
+  double centre_radius_{0.4};       // narrow window under the glider, used for the cube top
   double min_range_{0.45};
   double max_range_{12.0};
   double high_point_margin_{0.08};  // m closer than floor => "high"
-  double bin_size_{0.03};           // histogram bin width (m)
   int min_points_{30};
   int min_high_points_{10};
 
