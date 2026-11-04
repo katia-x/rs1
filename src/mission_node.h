@@ -39,6 +39,8 @@ private:
     void publish_weed_estimates(const rclcpp::Time & time);
     void publish_selected_weed(const rclcpp::Time & time);
     void publish_weed_goal();
+    void load_plant_catalog(const std::string & path);
+    std::string plant_name_for_position(const geometry_msgs::msg::Point & position) const;
     void publish_status(bool region_reset, bool mission_complete);
     void clear_weed_target();
     bool current_pose(geometry_msgs::msg::PoseStamped & pose);
@@ -56,6 +58,13 @@ private:
     std::vector<geometry_msgs::msg::Pose> region_vertices_;
     std::vector<geometry_msgs::msg::PoseStamped> search_lines_;
     double location_tolerance_{0.5};
+    double plant_pose_tolerance_{0.75};
+    struct PlantCatalogEntry {
+        std::string name;
+        double x;
+        double y;
+    };
+    std::vector<PlantCatalogEntry> plant_catalog_;
     rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr region_subscription_;
     rclcpp::Subscription<vision_msgs::msg::Detection2DArray>::SharedPtr detection_subscription_;
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr depth_subscription_;

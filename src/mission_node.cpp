@@ -3,7 +3,10 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <fstream>
+#include <limits>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 
@@ -18,9 +21,16 @@ MissionNode::MissionNode()
     wombat_base_frame_ = declare_parameter("wombat_base_frame", "husky1_base_link");
     search_lane_spacing_ = declare_parameter("search_lane_spacing", search_lane_spacing_);
     location_tolerance_ = declare_parameter("location_tolerance", location_tolerance_);
+    const auto plant_catalog_file = declare_parameter<std::string>(
+        "plant_catalog_file", "config/plant_catalog.txt");
+    plant_pose_tolerance_ = declare_parameter("plant_pose_tolerance", plant_pose_tolerance_);
     if (!std::isfinite(search_lane_spacing_) || search_lane_spacing_ <= 0.0) {
         throw std::invalid_argument("search_lane_spacing must be positive and finite");
     }
+    if (!std::isfinite(plant_pose_tolerance_) || plant_pose_tolerance_ <= 0.0) {
+        throw std::invalid_argument("plant_pose_tolerance must be positive and finite");
+    }
+    load_plant_catalog(plant_catalog_file);
     const auto detections_topic = declare_parameter<std::string>(
         "detections_topic", "/husky1/detections");
     const auto depth_topic = declare_parameter<std::string>(
@@ -122,6 +132,46 @@ MissionNode::MissionNode()
         std::bind(&MissionNode::serve_next_goal, this, std::placeholders::_1, std::placeholders::_2));
 
     RCLCPP_INFO(get_logger(), "Mission service ready; waiting for region and weed data");
+}
+
+void MissionNode::load_plant_catalog(const std::string & path)
+{
+    std::ifstream file(path);
+    if (!file) {
+        throw std::runtime_error("Unable to open plant catalog: " + path);
+    }
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line.front() == '#') {
+            continue;
+        }
+        std::istringstream row(line);
+        PlantCatalogEntry entry;
+        if (row >> entry.name >> entry.x >> entry.y) {
+            plant_catalog_.push_back(std::move(entry));
+        }
+    }
+    if (plant_catalog_.empty()) {
+        throw std::runtime_error("Plant catalog is empty: " + path);
+    }
+    RCLCPP_INFO(get_logger(), "Loaded %zu plant catalog entries from %s",
+        plant_catalog_.size(), path.c_str());
+}
+
+std::string MissionNode::plant_name_for_position(
+    const geometry_msgs::msg::Point & position) const
+{
+    const auto nearest = std::min_element(plant_catalog_.begin(), plant_catalog_.end(),
+        [&](const auto & first, const auto & second) {
+            const auto first_distance = std::hypot(position.x - first.x, position.y - first.y);
+            const auto second_distance = std::hypot(position.x - second.x, position.y - second.y);
+            return first_distance < second_distance;
+        });
+    if (nearest == plant_catalog_.end() ||
+        std::hypot(position.x - nearest->x, position.y - nearest->y) > plant_pose_tolerance_) {
+        return {};
+    }
+    return nearest->name;
 }
 
 // Replace the current search region and rebuild its waypoint pattern.
@@ -238,6 +288,12 @@ void MissionNode::publish_weed_goal()
     }
     message.weed_id = *selected_weed_id_;
     message.mission_generation = mission_generation_;
+    message.weed_name = plant_name_for_position(selected_weed_->position);
+    if (message.weed_name.empty()) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000,
+            "No plant catalog entry is within %.2f m of weed id=%llu",
+            plant_pose_tolerance_, static_cast<unsigned long long>(message.weed_id));
+    }
     weed_goal_publisher_->publish(message);
     RCLCPP_INFO_THROTTLE(
         get_logger(), *get_clock(), 2000,

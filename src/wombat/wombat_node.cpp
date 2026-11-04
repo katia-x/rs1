@@ -23,6 +23,8 @@ WombatNode::WombatNode()
 		throw std::invalid_argument("nav_unavailable_timeout must be finite and positive");
 	}
 	mission_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
+	delete_entity_client_ = create_client<DeleteEntity>(
+		"/world/rs1_terrain/remove");
 	weed_goal_subscription_ = create_subscription<rs1::msg::WombatWeedGoal>(
 		"/wombat/weed_goal", rclcpp::QoS(1).transient_local(),
 		std::bind(&WombatNode::weed_goal_callback, this, std::placeholders::_1));
@@ -34,6 +36,70 @@ WombatNode::WombatNode()
 	mission_retry_timer_ = create_wall_timer(100ms, [this]() { timer_callback(); });
 }
 
+void WombatNode::try_delete_weed()
+{
+	if (weed_deletion_in_flight_) {
+		return;
+	}
+	if (last_weed_name_.empty()) {
+		finish_weed_removal(true);
+		return;
+	}
+	if (weed_deletion_attempts_ >= 3) {
+		finish_weed_removal(false);
+		return;
+	}
+	if (!delete_entity_client_->service_is_ready()) {
+		++weed_deletion_attempts_;
+		RCLCPP_WARN(get_logger(), "Weed deletion service unavailable for %s (attempt %d/3)",
+			last_weed_name_.c_str(), weed_deletion_attempts_);
+		if (weed_deletion_attempts_ >= 3) {
+			finish_weed_removal(false);
+			return;
+		}
+		weed_deletion_retry_pending_ = true;
+		return;
+	}
+	weed_deletion_retry_pending_ = false;
+	weed_deletion_in_flight_ = true;
+	++weed_deletion_attempts_;
+	auto request = std::make_shared<DeleteEntity::Request>();
+	request->entity.name = last_weed_name_;
+	request->entity.type = ros_gz_interfaces::msg::Entity::MODEL;
+	delete_entity_client_->async_send_request(request,
+		[this](rclcpp::Client<DeleteEntity>::SharedFuture future) {
+			weed_deletion_in_flight_ = false;
+			const auto response = future.get();
+			if (response->success) {
+				RCLCPP_INFO(get_logger(), "Deleted weed model %s on attempt %d",
+					last_weed_name_.c_str(), weed_deletion_attempts_);
+				finish_weed_removal(true);
+			} else if (weed_deletion_attempts_ < 3) {
+				RCLCPP_WARN(get_logger(), "Failed to delete weed model %s on attempt %d; retrying",
+					last_weed_name_.c_str(), weed_deletion_attempts_);
+				weed_deletion_retry_pending_ = true;
+			} else {
+				RCLCPP_ERROR(get_logger(), "Failed to delete weed model %s after 3 attempts",
+					last_weed_name_.c_str());
+				finish_weed_removal(false);
+			}
+		});
+}
+
+void WombatNode::finish_weed_removal(bool removed)
+{
+	weed_deletion_in_flight_ = false;
+	weed_deletion_retry_pending_ = false;
+	if (removed) {
+		queue_request(GoalRequest::WEED_HANDLED, last_weed_id_);
+	} else {
+		queue_request(GoalRequest::WEED_UNREACHABLE, last_weed_id_);
+	}
+	last_goal_is_weed_ = false;
+	last_weed_name_.clear();
+	state_ = State::Searching;
+}
+
 void WombatNode::timer_callback()
 {
 	if (mission_stopped()) {
@@ -41,6 +107,10 @@ void WombatNode::timer_callback()
 	}
 
 	if (mission_request_in_flight_ || nav_goal_request_in_flight_ || nav_cancel_in_flight_) {
+		return;
+	}
+	if (weed_deletion_retry_pending_) {
+		try_delete_weed();
 		return;
 	}
 
@@ -58,7 +128,8 @@ void WombatNode::timer_callback()
 			send_navigation_goal(
 				last_navigation_goal_,
 				last_goal_is_weed_,
-				last_weed_id_);
+				last_weed_id_,
+				last_weed_name_);
 		}
 
 		return;
@@ -182,7 +253,7 @@ void WombatNode::dispatch_pending_weed_goal()
 	RCLCPP_INFO(get_logger(), "Sending weed goal %llu to Nav2",
 		static_cast<unsigned long long>(weed_goal.weed_id));
 	goal_failures_ = 0;
-	send_navigation_goal(weed_goal.goal, true, weed_goal.weed_id);
+	send_navigation_goal(weed_goal.goal, true, weed_goal.weed_id, weed_goal.weed_name);
 }
 
 void WombatNode::handle_nav_cancel(
@@ -243,12 +314,17 @@ void WombatNode::reset_for_new_region()
 	goal_failures_ = 0;
 	last_goal_is_weed_ = false;
 	last_weed_id_ = 0;
+	last_weed_name_.clear();
+	weed_deletion_in_flight_ = false;
+	weed_deletion_retry_pending_ = false;
+	weed_deletion_attempts_ = 0;
 	last_navigation_goal_valid_ = false;
 	state_ = State::WaitingForRegion;
 }
 
 void WombatNode::send_navigation_goal(
-	const geometry_msgs::msg::PoseStamped & pose, bool is_weed, std::uint64_t weed_id)
+	const geometry_msgs::msg::PoseStamped & pose, bool is_weed, std::uint64_t weed_id,
+	const std::string & weed_name)
 {
 	if (mission_stopped()) {
 		return;
@@ -258,11 +334,14 @@ void WombatNode::send_navigation_goal(
 	goal.pose = pose;
 	goal.pose.header.frame_id = goal.pose.header.frame_id.empty() ? global_frame_ : goal.pose.header.frame_id;
 	goal.pose.header.stamp = now();
-	last_goal_is_weed_ = is_weed;
-
 	if (is_weed) {
+		if (!last_goal_is_weed_ || weed_name != last_weed_name_) {
+			weed_deletion_attempts_ = 0;
+		}
 		last_weed_id_ = weed_id;
+		last_weed_name_ = weed_name;
 	}
+	last_goal_is_weed_ = is_weed;
 
 	last_navigation_goal_ = goal.pose;
 	last_navigation_goal_valid_ = true;
@@ -378,8 +457,7 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 		RCLCPP_INFO(get_logger(), "Nav2 reached the goal");
 		goal_failures_ = 0;
 		if (last_goal_is_weed_) {
-			queue_request(GoalRequest::WEED_HANDLED, last_weed_id_);
-			state_ = State::Searching;
+			try_delete_weed();
 		} else if (state_ == State::ApproachingStart || state_ == State::Turning) {
 			state_ = State::PreLaneWait;
 			lane_wait_until_ = std::chrono::steady_clock::now() +
@@ -405,7 +483,7 @@ void WombatNode::handle_nav_failure()
 			goal_failures_, max_goal_retries_);
 		if (last_goal_is_weed_ && last_navigation_goal_valid_) {
 			state_ = State::Searching;
-			send_navigation_goal(last_navigation_goal_, true, last_weed_id_);
+			send_navigation_goal(last_navigation_goal_, true, last_weed_id_, last_weed_name_);
 			return;
 		}
 		queue_request(GoalRequest::RETRY_CURRENT_GOAL);

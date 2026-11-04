@@ -4,6 +4,8 @@
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <action_msgs/srv/cancel_goal.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <ros_gz_interfaces/msg/entity.hpp>
+#include <ros_gz_interfaces/srv/delete_entity.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 
@@ -24,6 +26,7 @@ public:
 private:
 	using NavigateToPose = nav2_msgs::action::NavigateToPose;
 	using NavigateGoalHandle = rclcpp_action::ClientGoalHandle<NavigateToPose>;
+	using DeleteEntity = ros_gz_interfaces::srv::DeleteEntity;
 
 	enum class State
 	{
@@ -59,12 +62,14 @@ private:
 	void dispatch_pending_weed_goal();
 	void handle_nav_cancel(rclcpp_action::Client<NavigateToPose>::CancelResponse::SharedPtr response);
 	void send_navigation_goal(const geometry_msgs::msg::PoseStamped & pose, bool is_weed,
-		std::uint64_t weed_id);
+		std::uint64_t weed_id, const std::string & weed_name = {});
 	void reset_for_new_region();
 	void handle_nav_failure();
 	void handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future);
 	void handle_nav_goal_response(rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle);
 	void handle_nav_result(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result);
+	void try_delete_weed();
+	void finish_weed_removal(bool removed);
 
 	const std::string global_frame_;
 	const double lane_start_wait_duration_;
@@ -72,6 +77,7 @@ private:
 	const double nav_unavailable_timeout_;
 
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedPtr mission_client_;
+	rclcpp::Client<DeleteEntity>::SharedPtr delete_entity_client_;
 	rclcpp::Subscription<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_subscription_;
 	rclcpp::Subscription<rs1::msg::WombatStatus>::SharedPtr status_subscription_;
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
@@ -82,6 +88,10 @@ private:
 	bool last_goal_is_weed_{false};
 	std::uint64_t last_weed_id_{0};
 	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
+	bool weed_deletion_in_flight_{false};
+	bool weed_deletion_retry_pending_{false};
+	int weed_deletion_attempts_{0};
+	std::string last_weed_name_;
 	bool mission_request_in_flight_{false};
 	std::uint8_t mission_request_operation_{rs1::srv::WombatNextGoal::Request::REQUEST_NEXT_GOAL};
 	bool nav_goal_request_in_flight_{false};
