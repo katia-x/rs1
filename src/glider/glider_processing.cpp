@@ -423,32 +423,34 @@ void GliderProcessing::handleFinalDescend()
   command_.vx = clamp(kp_xy_ * (xy_target.x - current_pose_.x), -max_xy_speed_, max_xy_speed_);
   command_.vy = clamp(kp_xy_ * (xy_target.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
 
-  // if (height_sensor_valid_) {
-  //   const double height_error = height_above_poo_ - pickup_height_;
-  //   command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-  //   status_msg_ = "FINAL DESCEND: sensor → pickup height";
+  if (height_sensor_valid_) {
+    const double height_error = pickup_height_ - height_above_poo_;
+    command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
+    status_msg_ = "FINAL DESCEND: sensor → pickup height";
 
-  //   if (std::abs(height_error) <= z_tolerance_) {
-  //     command_.vz = 0.0;
-  //     transition(State::PICKUP);
-  //   }
-  // } else {
-    // odometry fallback (same idea as before)
+    if (std::abs(height_error) <= z_tolerance_) {
+      command_.vz = 0.0;
+      transition(State::PICKUP);
+    }
+  } else {
+    //odometry fallback 
     const Goal & goal = goals_[current_goal_idx_];
     const double target_z = goal.pose.z + pickup_height_;
     const double height_error = target_z - current_pose_.z;
     command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
     status_msg_ = "FINAL DESCEND: odometry fallback → pickup height";
 
-    if (current_pose_.z < 0.4 /*&& command_.vz < 0.0*/) {
+    if (std::abs(height_error) <= z_tolerance_) {
+    command_.vz = 0.0;
+    transition(State::PICKUP);
+    }
+  }
+    if (current_pose_.z < 0.35 && command_.vz < 0.0) {
     command_.vz = 0.0;
       transition(State::PICKUP);
     }
-    if (std::abs(height_error) <= z_tolerance_) {
-      command_.vz = 0.0;
-      transition(State::PICKUP);
-    }
-  //}
+
+  
 
   command_ = worldToBody(command_);
 }
