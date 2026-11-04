@@ -19,6 +19,8 @@
 
 #include "glider_processing.h"
 
+#include "platform.h"
+
 #include "rs1/msg/glider_goal.hpp"
 
 #include "rs1/srv/get_cube_centre.hpp"
@@ -34,6 +36,7 @@ public:
 
 
 private:
+  Platform platform_;
 
   // ROS callbacks
   void trajectoryCallback(
@@ -49,10 +52,6 @@ private:
 
   void removePooModel(
     const std::string & name);
-
-  void spawnPooAtTruck(
-    const std::string & name);
-
 
     
   //glider pose for poo movement

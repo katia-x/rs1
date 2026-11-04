@@ -15,6 +15,7 @@ endif()
 # ---------------------------------------------------------------------------
 find_package(ament_cmake REQUIRED)
 find_package(ament_cmake_gtest REQUIRED)
+find_package(ament_index_cpp REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
@@ -58,7 +59,7 @@ ament_target_dependencies(plant_detector rclcpp sensor_msgs vision_msgs cv_bridg
 target_link_libraries(plant_detector ${OpenCV_LIBS})
 
 # ---------------------------------------------------------------------------
-# Glider processing library (pure logic)
+# Glider processing library
 # ---------------------------------------------------------------------------
 add_library(glider_processing
   src/glider/glider_processing.cpp
@@ -67,7 +68,17 @@ target_include_directories(glider_processing PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
   $<INSTALL_INTERFACE:include>
 )
-
+# ---------------------------------------------------------------------------
+# Platform library (shared poo spawning)
+# ---------------------------------------------------------------------------
+add_library(platform
+  src/platform.cpp          
+)
+target_include_directories(platform PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(platform rclcpp ament_index_cpp)
 # ---------------------------------------------------------------------------
 # Glider node
 # ---------------------------------------------------------------------------
@@ -78,7 +89,7 @@ target_include_directories(glider_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
   $<INSTALL_INTERFACE:include>
 )
-target_link_libraries(glider_node glider_processing)
+target_link_libraries(glider_node glider_processing platform)
 ament_target_dependencies(glider_node
   rclcpp std_msgs geometry_msgs sensor_msgs nav_msgs
 )
@@ -117,6 +128,7 @@ install(TARGETS
   mission_node
   plant_detector
   glider_processing
+  platform
   glider_node
   sonar_node
   DESTINATION lib/${PROJECT_NAME}

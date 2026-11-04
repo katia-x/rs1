@@ -11,7 +11,8 @@ using std::placeholders::_1;
 
 
 GliderNode::GliderNode()
-: Node("glider_node")
+: Node("glider_node"),
+  platform_(this->get_logger())
 {
 
   // ---------------------------------------------------------
@@ -154,6 +155,7 @@ GliderNode::GliderNode()
     this->create_client<
     rs1::srv::GetCubeCentre>(
       "/glider/sonar");
+
   // ---------------------------------------------------------
   // Parrot velocity command
   // ---------------------------------------------------------
@@ -324,35 +326,6 @@ void GliderNode::removePooModel(const std::string & name)
   }
 }
 
-// ---------------------------------------------------------
-// Spawn a poo model at the truck
-// ---------------------------------------------------------
-void GliderNode::spawnPooAtTruck(const std::string & name)
-{
-  // Path to the same SDF we already use
-  std::string sdf_path =
-    ament_index_cpp::get_package_share_directory("rs1") +
-    "/worlds/poo_cube/poo_cube.sdf";
-
-  // Truck pose 
-  double x = current_pose_.x;
-  double y = current_pose_.y;
-  double z = current_pose_.z - 0.20;   
-
-  std::stringstream ss;
-  ss << "ros2 run ros_gz_sim create "
-     << "-world rs1_terrain "
-     << "-name " << name << " "
-     << "-x " << x << " -y " << y << " -z " << z << " "
-     << "-file " << sdf_path;
-
-  int ret = std::system(ss.str().c_str());
-  if (ret != 0) {
-    RCLCPP_WARN(this->get_logger(), "Failed to spawn model '%s' at truck", name.c_str());
-  } else {
-    RCLCPP_INFO(this->get_logger(), "Spawned model '%s' at truck", name.c_str());
-  }
-}
 
 /*
  * ---------------------------------------------------------
@@ -386,7 +359,7 @@ void GliderNode::controlLoop()
 
   if (!is_carrying && was_carrying) {
     if (!current_model_name_.empty()) {
-      spawnPooAtTruck(current_model_name_);
+      platform_.spawnPoo(current_model_name_, current_pose_.x, current_pose_.y, current_pose_.z - 0.20);
       current_model_name_.clear();
     }
   }
