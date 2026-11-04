@@ -138,6 +138,7 @@ std::pair<VelocityCommand, std::string> GliderProcessing::tick()
     case State::ALIGN:         handleAlign();        break;
     case State::FINAL_DESCEND: handleFinalDescend(); break;
     case State::PICKUP:        handlePickup();       break;
+    case State::CLEAR_EXIT:    handleClearExit();     break;
     case State::GOTO_TRUCK:    handleGoToTruck();    break;
     case State::DROP_OFF:      handleDropOff();      break;
     case State::RETURN_HOME:   handleReturnHome();   break;
@@ -258,6 +259,7 @@ bool GliderProcessing::slideClear()
 {
   if (!sliding_) {
     sliding_ = true;
+    avoided_obstacle_ = true;
     slide_legs_ = 0;
     slide_leg_start_ = current_pose_;
   }
@@ -504,9 +506,43 @@ void GliderProcessing::handlePickup()
 
   status_msg_ = "PICKUP: poo collected";
 
-  transition(State::GOTO_TRUCK);
+  if (avoided_obstacle_) {
+    transition(State::CLEAR_EXIT);
+  } else {
+    transition(State::GOTO_TRUCK);
+  }
 }
 
+void GliderProcessing::handleClearExit()
+{
+  const Goal * goal = currentGoal();
+  // Absolute height we want to return to (same reference used in DESCEND)
+  const double target_z = (goal != nullptr)
+                            ? goal->pose.z + align_height_
+                            : current_pose_.z + align_height_;
+
+  if (fly_phase_ == FlyPhase::CLIMB) {
+    const double z_error = target_z - current_pose_.z;
+    command_.vz = clamp(kp_z_ * z_error, -max_z_speed_, max_z_speed_);
+    status_msg_ = "CLEAR_EXIT: climbing to align height";
+
+    if (std::abs(z_error) <= z_tolerance_) {
+      command_.vz = 0.0;
+      fly_phase_ = FlyPhase::TRANSIT;
+    }
+    return;
+  }
+
+  // Already at align height – slide sideways to the known-clear column
+  status_msg_ = "CLEAR_EXIT: moving to clear column";
+  moveXY(column_xy_);
+
+  if (xyClose(current_pose_, column_xy_)) {
+    command_.vx = 0.0;
+    command_.vy = 0.0;
+    transition(State::GOTO_TRUCK);   // now climb the rest of the way from a clear column
+  }
+}
 
 void GliderProcessing::handleGoToTruck()
 {
@@ -586,6 +622,7 @@ void GliderProcessing::resetDescend()
   slide_legs_ = 0;
   slide_dir_x_ = 1.0;
   slide_dir_y_ = 0.0;
+  avoided_obstacle_ = false;
 
   const Goal * goal = currentGoal();
   column_xy_ = goal != nullptr ? goal->pose : current_pose_;

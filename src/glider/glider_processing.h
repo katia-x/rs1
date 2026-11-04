@@ -39,6 +39,7 @@ enum class State
   ALIGN,           // centre over the cube using the sonar service
   FINAL_DESCEND,   // descend to pickup height
   PICKUP,
+  CLEAR_EXIT,      // whether or not the glider had to clear an obstacle
   GOTO_TRUCK,      // climb to safe height, then fly over the truck
   DROP_OFF,        // descend onto the truck and release
   RETURN_HOME,     // climb to safe height, then fly home
@@ -145,6 +146,7 @@ private:
   void handleAlign();
   void handleFinalDescend();
   void handlePickup();
+  void handleClearExit();
   void handleGoToTruck();
   void handleDropOff();
   void handleReturnHome();
@@ -236,6 +238,7 @@ private:
   Pose slide_leg_start_;
   double slide_dir_x_{1.0};
   double slide_dir_y_{0.0};
+  bool avoided_obstacle_ = false;
 
   // ALIGN
   AlignPhase align_phase_{AlignPhase::APPROACH};
