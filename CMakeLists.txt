@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(rs1)
 
 find_package(ament_cmake REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
@@ -24,6 +25,7 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WombatWeedGoal.msg"
   "msg/WombatStatus.msg"
+  "msg/WombatState.msg"
   "srv/WombatNextGoal.srv"
   DEPENDENCIES geometry_msgs
 )
@@ -48,13 +50,17 @@ ament_target_dependencies(
 )
 rosidl_target_interfaces(mission_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(wombat_node src/wombat/wombat_node.cpp)
+add_executable(wombat_node
+  src/wombat/wombat_node.cpp
+  src/gui_management/gui_management.cpp
+)
+target_include_directories(wombat_node PRIVATE src)
 ament_target_dependencies(
   wombat_node
+  action_msgs
   nav2_msgs
   rclcpp
   rclcpp_action
-  ros_gz_interfaces
   std_msgs
 )
 rosidl_target_interfaces(wombat_node ${PROJECT_NAME} "rosidl_typesupport_cpp")

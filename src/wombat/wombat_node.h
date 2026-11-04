@@ -9,10 +9,13 @@
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
 #include <std_msgs/msg/u_int32.hpp>
+#include <std_msgs/msg/bool.hpp>
 
 #include "rs1/msg/wombat_status.hpp"
+#include "rs1/msg/wombat_state.hpp"
 #include "rs1/msg/wombat_weed_goal.hpp"
 #include "rs1/srv/wombat_next_goal.hpp"
+#include "../gui_management/gui_management.h"
 
 #include <memory>
 #include <chrono>
@@ -54,6 +57,8 @@ private:
 	};
 
 	void timer_callback();
+	void publish_state();
+	void set_state(State state);
 	void request_next_goal(std::uint8_t operation, std::uint64_t weed_id = 0);
 	void queue_request(std::uint8_t operation, std::uint64_t weed_id = 0);
 	void weed_goal_callback(const rs1::msg::WombatWeedGoal::SharedPtr message);
@@ -67,11 +72,17 @@ private:
 	std::uint64_t weed_id, const std::string & weed_name = {});
 	void reset_for_new_region();
 	void handle_nav_failure();
-	void handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future);
+	void handle_mission_goal(
+		rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future,
+		std::uint64_t request_id, std::uint64_t request_override_generation);
 	void handle_nav_goal_response(rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle);
 	void handle_nav_result(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result);
 	void try_delete_weed();
 	void finish_weed_removal(bool removed);
+	void handle_override(bool enabled);
+	void handle_estop();
+	void handle_resume();
+	void cancel_active_goal();
 
 	const std::string global_frame_;
 	const double lane_start_wait_duration_;
@@ -83,6 +94,7 @@ private:
 	rclcpp::Subscription<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_subscription_;
 	rclcpp::Subscription<rs1::msg::WombatStatus>::SharedPtr status_subscription_;
 	rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr weeds_removed_publisher_;
+	rclcpp::Publisher<rs1::msg::WombatState>::SharedPtr state_publisher_;
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
 	NavigateGoalHandle::SharedPtr active_goal_;
 	NavigateGoalHandle::SharedPtr canceling_goal_;
@@ -95,9 +107,13 @@ private:
 	bool weed_deletion_retry_pending_{false};
 	int weed_deletion_attempts_{0};
 	std::string last_weed_name_;
+	rclcpp::TimerBase::SharedPtr state_timer_;
 	bool mission_request_in_flight_{false};
+	std::unique_ptr<GuiManagement> gui_management_;
 	std::uint8_t mission_request_operation_{rs1::srv::WombatNextGoal::Request::REQUEST_NEXT_GOAL};
+	std::uint64_t mission_request_id_{0};
 	bool nav_goal_request_in_flight_{false};
+	std::uint64_t nav_goal_request_id_{0};
 	bool nav_cancel_in_flight_{false};
 	PendingRequest pending_request_;
 	PendingWeedGoal pending_weed_goal_;

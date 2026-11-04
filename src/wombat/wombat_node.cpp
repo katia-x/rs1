@@ -1,6 +1,7 @@
 #include "wombat_node.h"
 
 #include <cmath>
+#include <functional>
 #include <stdexcept>
 
 using namespace std::chrono_literals;
@@ -31,6 +32,8 @@ WombatNode::WombatNode()
 	status_subscription_ = create_subscription<rs1::msg::WombatStatus>(
 		"/wombat/status", rclcpp::QoS(1).transient_local(),
 		std::bind(&WombatNode::status_callback, this, std::placeholders::_1));
+	state_publisher_ = create_publisher<rs1::msg::WombatState>(
+		"/wombat/state", rclcpp::QoS(1).transient_local());
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
 
@@ -42,8 +45,33 @@ WombatNode::WombatNode()
 	std_msgs::msg::UInt32 initial_count;
 	initial_count.data = 0;
 	weeds_removed_publisher_->publish(initial_count);
+    
+	gui_management_ = std::make_unique<GuiManagement>(
+		*this,
+		[this](bool enabled) { handle_override(enabled); },
+		[this]() { handle_estop(); },
+		[this]() { handle_resume(); });
 
 	mission_retry_timer_ = create_wall_timer(100ms, [this]() { timer_callback(); });
+	state_timer_ = create_wall_timer(1s, [this]() { publish_state(); });
+	publish_state();
+}
+
+void WombatNode::publish_state()
+{
+	rs1::msg::WombatState message;
+	message.state = static_cast<std::uint8_t>(state_);
+	message.mission_generation = mission_generation_;
+	state_publisher_->publish(message);
+}
+
+void WombatNode::set_state(State state)
+{
+	if (state_ == state) {
+		return;
+	}
+	state_ = state;
+	publish_state();
 }
 
 void WombatNode::try_delete_weed()
@@ -174,7 +202,8 @@ void WombatNode::timer_callback()
 		return;
 	}
 
-	if (mission_request_in_flight_ || nav_goal_request_in_flight_ || nav_cancel_in_flight_) {
+	if (gui_management_->manual_override() || gui_management_->estop_active() || mission_request_in_flight_ ||
+		nav_goal_request_in_flight_ || nav_cancel_in_flight_) {
 		return;
 	}
 	if (weed_deletion_retry_pending_) {
@@ -225,7 +254,7 @@ void WombatNode::timer_callback()
 		return;
 	case State::PreLaneWait:
 		if (std::chrono::steady_clock::now() < lane_wait_until_) { return; }
-		state_ = State::Searching;
+		set_state(State::Searching);
 		[[fallthrough]];
 	case State::WaitingForRegion:
 		if (!pending_request_.pending) { pending_request_.pending = true; }
@@ -270,11 +299,16 @@ void WombatNode::request_next_goal(std::uint8_t operation, std::uint64_t weed_id
 	mission_request_in_flight_ = true;
 	mission_request_operation_ = operation;
 	mission_request_generation_ = mission_generation_;
+	const auto request_id = ++mission_request_id_;
+	const auto request_override_generation = gui_management_->override_generation();
 	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
 	request->operation = operation;
 	request->weed_id = weed_id;
 	mission_client_->async_send_request(
-		request, std::bind(&WombatNode::handle_mission_goal, this, std::placeholders::_1));
+		request, [this, request_id, request_override_generation](
+			rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future) {
+			handle_mission_goal(future, request_id, request_override_generation);
+		});
 }
 
 void WombatNode::weed_goal_callback(const rs1::msg::WombatWeedGoal::SharedPtr message)
@@ -317,7 +351,7 @@ void WombatNode::dispatch_pending_weed_goal()
 	}
 	const auto weed_goal = pending_weed_goal_.goal;
 	pending_weed_goal_.pending = false;
-	state_ = State::Searching;
+	set_state(State::Searching);
 	RCLCPP_INFO(get_logger(), "Sending weed goal %llu to Nav2",
 		static_cast<unsigned long long>(weed_goal.weed_id));
 	goal_failures_ = 0;
@@ -348,7 +382,7 @@ void WombatNode::complete_mission()
 	nav_unavailable_since_ = {};
 	canceling_goal_.reset();
 	nav_cancel_in_flight_ = false;
-	state_ = State::Complete;
+	set_state(State::Complete);
 	pending_weed_goal_.pending = false;
 	pending_request_.pending = false;
 }
@@ -393,7 +427,7 @@ void WombatNode::reset_for_new_region()
 	weed_deletion_retry_pending_ = false;
 	weed_deletion_attempts_ = 0;
 	last_navigation_goal_valid_ = false;
-	state_ = State::WaitingForRegion;
+	set_state(State::WaitingForRegion);
 }
 
 void WombatNode::send_navigation_goal(
@@ -436,9 +470,17 @@ void WombatNode::send_navigation_goal(
 
 	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
 	const auto goal_generation = mission_generation_;
+	const auto request_id = ++nav_goal_request_id_;
+	const auto request_override_generation = gui_management_->override_generation();
 	options.goal_response_callback =
-		[this, goal_generation](NavigateGoalHandle::SharedPtr goal_handle) {
-			if (goal_generation != mission_generation_ || mission_stopped()) {
+		[this, goal_generation, request_id, request_override_generation](NavigateGoalHandle::SharedPtr goal_handle) {
+			if (request_id != nav_goal_request_id_) {
+				if (goal_handle) { navigation_client_->async_cancel_goal(goal_handle); }
+				return;
+			}
+			if (goal_generation != mission_generation_ ||
+				request_override_generation != gui_management_->override_generation() ||
+				mission_stopped()) {
 				nav_goal_request_in_flight_ = false;
 				if (goal_handle) { navigation_client_->async_cancel_goal(goal_handle); }
 				return;
@@ -446,8 +488,10 @@ void WombatNode::send_navigation_goal(
 			handle_nav_goal_response(goal_handle);
 		};
 	options.result_callback =
-		[this, goal_generation](const NavigateGoalHandle::WrappedResult & result) {
-			if (goal_generation == mission_generation_ && !mission_stopped()) {
+		[this, goal_generation, request_override_generation](const NavigateGoalHandle::WrappedResult & result) {
+			if (goal_generation == mission_generation_ &&
+				request_override_generation == gui_management_->override_generation() &&
+				!mission_stopped()) {
 				handle_nav_result(result);
 			}
 		};
@@ -456,10 +500,15 @@ void WombatNode::send_navigation_goal(
 }
 
 void WombatNode::handle_mission_goal(
-	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future)
+	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future,
+	std::uint64_t request_id, std::uint64_t request_override_generation)
 {
+	if (request_id != mission_request_id_) {
+		return;
+	}
 	mission_request_in_flight_ = false;
-	if (mission_stopped() || mission_request_generation_ != mission_generation_) {
+	if (mission_stopped() || mission_request_generation_ != mission_generation_ ||
+		request_override_generation != gui_management_->override_generation()) {
 		return;
 	}
 
@@ -469,8 +518,11 @@ void WombatNode::handle_mission_goal(
 			complete_mission();
 			return;
 		}
+		if (gui_management_->manual_override() || gui_management_->estop_active()) {
+			return;
+		}
 		if (!response->success) {
-			state_ = State::WaitingForRegion;
+			set_state(State::WaitingForRegion);
 			pending_request_.pending = true;
 			return;
 		}
@@ -484,17 +536,17 @@ void WombatNode::handle_mission_goal(
 			response->is_weed ? "true" : "false", response->is_turn ? "true" : "false",
 			response->is_lane_start ? "true" : "false");
 		if (response->is_lane_start) {
-			state_ = State::ApproachingStart;
+			set_state(State::ApproachingStart);
 		} else if (response->is_turn) {
-			state_ = State::Turning;
+			set_state(State::Turning);
 		} else {
-			state_ = State::Searching;
+			set_state(State::Searching);
 		}
 		send_navigation_goal(response->goal, response->is_weed, response->weed_id);
 	} catch (const std::exception & error) {
 		mission_request_in_flight_ = false;
 		RCLCPP_WARN(get_logger(), "Mission service call failed: %s", error.what());
-		state_ = State::Recovery;
+		set_state(State::Recovery);
 		queue_request(mission_request_operation_, last_weed_id_);
 	}
 }
@@ -504,10 +556,15 @@ void WombatNode::handle_nav_goal_response(NavigateGoalHandle::SharedPtr goal_han
 	nav_goal_request_in_flight_ = false;
 	if (!goal_handle) {
 		RCLCPP_ERROR(get_logger(), "Nav2 rejected the goal");
-		state_ = State::Recovery;
+		set_state(State::Recovery);
 		handle_nav_failure();
 		return;
 	}
+	if (gui_management_->manual_override() || gui_management_->estop_active()) {
+		navigation_client_->async_cancel_goal(goal_handle);
+		return;
+	}
+
 	active_goal_ = goal_handle;
 	RCLCPP_INFO(get_logger(), "Nav2 accepted the goal");
 }
@@ -527,13 +584,18 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 	if (nav_goal_request_in_flight_ || !active_goal_ ||
 		result.goal_id != active_goal_->get_goal_id()) { return; }
 	active_goal_.reset();
+	if (gui_management_->manual_override() || gui_management_->estop_active()) {
+		return;
+	}
 	if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
 		RCLCPP_INFO(get_logger(), "Nav2 reached the goal");
 		goal_failures_ = 0;
 		if (last_goal_is_weed_) {
 			try_delete_weed();
+			queue_request(GoalRequest::WEED_HANDLED, last_weed_id_);
+			set_state(State::Searching);
 		} else if (state_ == State::ApproachingStart || state_ == State::Turning) {
-			state_ = State::PreLaneWait;
+			set_state(State::PreLaneWait);
 			lane_wait_until_ = std::chrono::steady_clock::now() +
 				std::chrono::duration_cast<std::chrono::steady_clock::duration>(
 					std::chrono::duration<double>(lane_start_wait_duration_));
@@ -543,9 +605,9 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 		}
 		return;
 	}
-	RCLCPP_WARN(get_logger(), "Nav2 failed to reach the goal, result_code=%d",
+		RCLCPP_WARN(get_logger(), "Nav2 failed to reach the goal, result_code=%d",
 		static_cast<int>(result.code));
-	state_ = State::Recovery;
+	set_state(State::Recovery);
 	handle_nav_failure();
 }
 
@@ -556,7 +618,7 @@ void WombatNode::handle_nav_failure()
 		RCLCPP_WARN(get_logger(), "Retrying navigation goal (%zu/%d)",
 			goal_failures_, max_goal_retries_);
 		if (last_goal_is_weed_ && last_navigation_goal_valid_) {
-			state_ = State::Searching;
+			set_state(State::Searching);
 			send_navigation_goal(last_navigation_goal_, true, last_weed_id_, last_weed_name_);
 			return;
 		}
@@ -564,6 +626,7 @@ void WombatNode::handle_nav_failure()
 		return;
 	}
 	RCLCPP_ERROR(get_logger(), "Navigation goal is unreachable after %zu retries", goal_failures_ - 1);
+	//request_next_goal(true);
 	if (last_goal_is_weed_) {
 		queue_request(GoalRequest::WEED_UNREACHABLE, last_weed_id_);
 	} else {
@@ -582,11 +645,39 @@ void WombatNode::abort_mission()
 	complete_mission();
 
 	last_navigation_goal_valid_ = false;
-	state_ = State::Abort;
+	set_state(State::Abort);
 
 	RCLCPP_ERROR(
 		get_logger(), "Mission aborted: Nav2 unavailable for %.1f seconds",
 		nav_unavailable_timeout_);
+}
+
+void WombatNode::handle_override(bool enabled)
+{
+	if (enabled) {
+		cancel_active_goal();
+	} else {
+		request_next_goal(GoalRequest::REQUEST_NEXT_GOAL);
+	}
+}
+
+void WombatNode::handle_estop()
+{
+	cancel_active_goal();
+}
+
+void WombatNode::handle_resume()
+{
+	request_next_goal(GoalRequest::REQUEST_NEXT_GOAL);
+}
+
+void WombatNode::cancel_active_goal()
+{
+	if (active_goal_) {
+		navigation_client_->async_cancel_goal(active_goal_);
+		active_goal_.reset();
+	}
+	mission_request_in_flight_ = false;
 }
 
 int main(int argc, char ** argv)
