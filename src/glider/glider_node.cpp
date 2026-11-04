@@ -132,9 +132,7 @@ GliderNode::GliderNode()
   //
   // Future sensor input.
   //
-  // The current Parrot model does not actually publish
-  // sensor_msgs/Range, so the processing layer will use
-  // odometry as a temporary fallback.
+  // 
   //
   height_sub_ =
     this->create_subscription<
@@ -146,6 +144,16 @@ GliderNode::GliderNode()
           this,
           _1));
 
+
+  // ---------------------------------------------------------
+  // Nearest point from sensor
+  // ---------------------------------------------------------
+  //
+  nearest_below_sub_ =
+    this->create_subscription<std_msgs::msg::Float32>(
+      "/glider/sonar_high_range", 10,
+      std::bind(&GliderNode::nearestBelowCallback, this, _1));
+    
 
   // ---------------------------------------------------------
   // Cube centre
@@ -328,6 +336,10 @@ void GliderNode::removePooModel(const std::string & name)
   }
 }
 
+void GliderNode::nearestBelowCallback(const std_msgs::msg::Float32::SharedPtr msg)
+{
+  processing_->setNearestBelow(static_cast<double>(msg->data));
+}
 
 /*
  * ---------------------------------------------------------
@@ -407,6 +419,8 @@ void GliderNode::controlLoop()
         this->get_logger(), *this->get_clock(), 2000, "Sonar service not ready yet");
     }
   }
+
+
   // Convert processing command to ROS message
   geometry_msgs::msg::Twist cmd;
 

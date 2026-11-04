@@ -21,6 +21,8 @@
 
 #include "platform.h"
 
+#include <std_msgs/msg/float32.hpp>
+
 #include "rs1/msg/glider_goal.hpp"
 
 #include "rs1/srv/get_cube_centre.hpp"
@@ -47,6 +49,9 @@ private:
 
   void heightCallback(
     const sensor_msgs::msg::Range::SharedPtr msg);
+
+  void nearestBelowCallback(const std_msgs::msg::Float32::SharedPtr msg);
+  rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr nearest_below_sub_;
 
   void controlLoop();
 
