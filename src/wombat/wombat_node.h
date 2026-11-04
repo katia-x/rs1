@@ -63,11 +63,16 @@ private:
 		std::uint64_t weed_id);
 	void reset_for_new_region();
 	void handle_nav_failure();
-	void handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future);
+	void handle_mission_goal(
+		rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future,
+		std::uint64_t request_id, std::uint64_t override_generation);
 	void handle_nav_goal_response(rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle);
 	void handle_nav_result(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result);
 	void override_callback(const std_msgs::msg::Bool::ConstSharedPtr message);
+	void estop_callback(const std_msgs::msg::Bool::ConstSharedPtr message);
+	void resume_callback(const std_msgs::msg::Bool::ConstSharedPtr message);
 	void publish_override_state();
+	void publish_estop_state();
 	void cancel_active_goal();
 
 	const std::string global_frame_;
@@ -88,10 +93,19 @@ private:
 	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
 	bool mission_request_in_flight_{false};
 	bool manual_override_{false};// manual override
-	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr override_subscription_;//manual override
-	rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr override_state_publisher_;//manual override
+	bool estop_active_{false};
+	bool estop_release_ready_{false};
+	bool resume_required_{false};
+	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr override_subscription_;
+	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr estop_subscription_;
+	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr resume_subscription_;
+	rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr override_state_publisher_;
+	rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr estop_state_publisher_;
 	std::uint8_t mission_request_operation_{rs1::srv::WombatNextGoal::Request::REQUEST_NEXT_GOAL};
+	std::uint64_t mission_request_id_{0};
+	std::uint64_t override_generation_{0};
 	bool nav_goal_request_in_flight_{false};
+	std::uint64_t nav_goal_request_id_{0};
 	bool nav_cancel_in_flight_{false};
 	PendingRequest pending_request_;
 	PendingWeedGoal pending_weed_goal_;

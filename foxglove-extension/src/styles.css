@@ -55,6 +55,22 @@
   padding: 5px 8px;
 }
 
+.operator-status .estop-button {
+  background: #8f2f35;
+  border-color: #e26d73;
+  font-weight: bold;
+}
+
+.operator-status .release-button {
+  background: #286044;
+  border-color: #73c995;
+}
+
+.operator-status button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .status-enabled {
   color: #ffb36b;
   font-weight: bold;

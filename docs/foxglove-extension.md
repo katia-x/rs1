@@ -82,14 +82,20 @@ The operator map defines a region with exactly two clicks for opposite
 corners. The panel expands those corners into a four-vertex axis-aligned
 rectangle before publishing `/region`; a third click starts a new rectangle.
 
-The operator panel observes `/husky1/manual_override`,
+The operator panel observes `/husky1/manual_override` and `/husky1/estop`,
 `/husky1/weed_estimate_markers`, `/husky1/target_weed_marker`, and
 `/husky1/tf` and `/husky1/tf_static`. The map resolves the
 `map -> husky1_base_link` transform chain as the live Wombat location and
 retains up to 1,000 positions as a dashed trail.
-The trail can be cleared independently. Its override button publishes a single
-`std_msgs/msg/Bool` request to `/husky1/manual_override_command`; it does not
-publish velocity commands. When enabled, the Wombat node cancels/stops
+The trail can be cleared independently. The operator panel provides a
+**Manual Override** toggle (which changes to **Automatic**), an independent
+**E-stop** toggle, and **Resume**. E-stop publishes to
+`/husky1/estop_command`; pressing it changes the button to **Release**.
+Release clears the E-stop but does not resume navigation. **Resume** is enabled
+only after an E-stop has been activated and then released, and publishes
+`true` to `/husky1/resume_command`. The Manual Override button cannot bypass
+this explicit resume step. These controls do not publish velocity commands.
+When enabled, the Wombat node cancels/stops
 autonomous navigation; the existing Teleop panel continues publishing
 `geometry_msgs/msg/Twist` directly to `/husky1/cmd_vel`.
 The operator panel also accepts a custom map background image URL. The image

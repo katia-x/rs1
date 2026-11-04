@@ -1,5 +1,6 @@
-to run sim in 41068_ws/src/rs1 run:
+to run sim in /git/rs1 run:
 source /opt/ros/humble/setup.bash
+source ~/git/rs1/install/setup.bash
 colcon build --packages-select rs1 --symlink-install
 ros2 launch rs1 rs1_demo.launch.py gui:=true
 

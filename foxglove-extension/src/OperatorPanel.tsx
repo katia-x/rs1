@@ -7,6 +7,7 @@ import smallMapUrl from "./assets/small_map.png";
 import "./styles.css";
 
 type Point = { x: number; y: number };
+type EstopCycle = "idle" | "active" | "released";
 type PanelState = {
   globalFrame?: string;
   regionTopic?: string;
@@ -17,6 +18,9 @@ type PanelState = {
   tfStaticTopic?: string;
   overrideTopic?: string;
   overrideCommandTopic?: string;
+  estopTopic?: string;
+  estopCommandTopic?: string;
+  resumeCommandTopic?: string;
 };
 type Marker = {
   action?: number;
@@ -217,6 +221,11 @@ function OperatorPanel({
   const [overrideCommandTopic, setOverrideCommandTopic] = useState(
     initialState.overrideCommandTopic ?? "/husky1/manual_override_command",
   );
+  const estopTopic = initialState.estopTopic ?? "/husky1/estop";
+  const estopCommandTopic =
+    initialState.estopCommandTopic ?? "/husky1/estop_command";
+  const resumeCommandTopic =
+    initialState.resumeCommandTopic ?? "/husky1/resume_command";
   const [region, setRegion] = useState<Point[]>([]);
   const [draftRegion, setDraftRegion] = useState<Point[]>([]);
   const [weeds, setWeeds] = useState<Point[]>([]);
@@ -227,6 +236,8 @@ function OperatorPanel({
   const lastTrailPoint = useRef<Point>();
   const transforms = useRef<Transform[]>([]);
   const [override, setOverride] = useState(false);
+  const [estop, setEstop] = useState(false);
+  const [estopCycle, setEstopCycle] = useState<EstopCycle>("idle");
   const [lastMarkerTime, setLastMarkerTime] = useState<number>();
   const [lastTfTime, setLastTfTime] = useState<number>();
   const [lastOverrideTime, setLastOverrideTime] = useState<number>();
@@ -343,6 +354,18 @@ function OperatorPanel({
         );
         setLastOverrideTime(Date.now());
       }
+      const estopEvent = latest(estopTopic);
+      if (estopEvent) {
+        const active = Boolean(
+          (estopEvent.message as { data?: boolean }).data,
+        );
+        setEstop(active);
+        if (active) {
+          setEstopCycle("active");
+        } else if (estopCycle !== "idle") {
+          setEstopCycle("released");
+        }
+      }
       done();
     };
     context.watch("currentFrame");
@@ -354,6 +377,7 @@ function OperatorPanel({
       { topic: tfTopic },
       { topic: tfStaticTopic },
       { topic: overrideTopic },
+      { topic: estopTopic },
     ]);
   }, [
     context,
@@ -361,6 +385,8 @@ function OperatorPanel({
     permanentTopic,
     globalFrame,
     overrideTopic,
+    estopTopic,
+    estopCycle,
     regionTopic,
     targetTopic,
     tfTopic,
@@ -378,6 +404,9 @@ function OperatorPanel({
       tfStaticTopic,
       overrideTopic,
       overrideCommandTopic,
+      estopTopic,
+      estopCommandTopic,
+      resumeCommandTopic,
     });
 
   const publishRegion = () => {
@@ -413,18 +442,24 @@ function OperatorPanel({
     }
   };
 
-  const setManualOverride = (enabled: boolean) => {
+  const publishBool = (
+    topic: string,
+    value: boolean,
+    action: string,
+    onPublished?: () => void,
+  ) => {
     try {
       if (!context.advertise || !context.publish) {
         throw new Error(
           "The connected Foxglove data source does not support publishing.",
         );
       }
-      context.advertise(overrideCommandTopic, BOOL_SCHEMA);
-      context.publish(overrideCommandTopic, { data: enabled });
+      context.advertise(topic, BOOL_SCHEMA);
+      context.publish(topic, { data: value });
+      onPublished?.();
       setError(undefined);
     } catch (publishError) {
-      setError(`Could not request manual override: ${String(publishError)}`);
+      setError(`Could not request ${action}: ${String(publishError)}`);
     }
   };
 
@@ -432,6 +467,14 @@ function OperatorPanel({
     time === undefined
       ? "missing"
       : `${((Date.now() - time) / 1000).toFixed(1)}s ago`;
+
+  const toggleEstop = () => {
+    const nextEstop = !estop;
+    publishBool(estopCommandTopic, nextEstop, "E-stop", () => {
+      setEstop(nextEstop);
+      setEstopCycle(nextEstop ? "active" : "released");
+    });
+  };
 
   return (
     <div className="operator-panel">
@@ -494,8 +537,28 @@ function OperatorPanel({
         <span className={override ? "status-enabled" : "status-disabled"}>
           {override ? "ENABLED" : "DISABLED"}
         </span>
-        <button type="button" onClick={() => setManualOverride(!override)}>
-          Request {override ? "automatic" : "manual"} mode
+        <button
+          type="button"
+          onClick={() => publishBool(overrideCommandTopic, !override, "manual mode")}
+        >
+          {override ? "Automatic" : "Manual Override"}
+        </button>
+        <button
+          className="estop-button"
+          type="button"
+          onClick={toggleEstop}
+        >
+          {estop ? "Release" : "E-stop"}
+        </button>
+        <button
+          className="release-button"
+          type="button"
+          disabled={estop || estopCycle !== "released"}
+          onClick={() =>
+            publishBool(resumeCommandTopic, true, "resume")
+          }
+        >
+          Resume
         </button>
         <span>state {age(lastOverrideTime)}</span>
       </div>
