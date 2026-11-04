@@ -29,12 +29,14 @@ GliderNode::GliderNode()
 
   this->declare_parameter("safe_height", 15.0);
   this->declare_parameter("pickup_height", 0.2);
-  this->declare_parameter("align_height", 1.5);
+  this->declare_parameter("align_height", 3.0);
 
   this->declare_parameter("xy_tolerance", 0.4);
   this->declare_parameter("z_tolerance", 0.15);
 
   this->declare_parameter("control_rate", 20.0);
+
+  this->declare_parameter("align_tolerance", 0.08);
 
 
   // ---------------------------------------------------------
@@ -81,7 +83,7 @@ GliderNode::GliderNode()
       this->get_parameter("xy_tolerance").as_double(),
       this->get_parameter("z_tolerance").as_double());
 
-
+  processing_->setAlignTolerance(this->get_parameter("align_tolerance").as_double());
   // ---------------------------------------------------------
   // Poo location input
   // ---------------------------------------------------------
@@ -365,49 +367,46 @@ void GliderNode::controlLoop()
   }
 
   was_carrying = is_carrying;
-  // call sonar service once when we enter ALIGN 
-  static glider::State last_state = glider::State::STANDBY;
-  const auto current_state = processing_->state();
+    // Ask the sonar for the cube centre whenever ALIGN wants a reading
+  if (processing_->wantsCubeCentre()) {
+    if (sonar_client_->service_is_ready()) {
+      processing_->markCubeCentreRequested();
 
-  // if (current_state == glider::State::ALIGN && last_state != glider::State::ALIGN)
-  // {
-  //   if (sonar_client_->service_is_ready())
-  //   {
-  //     auto request = std::make_shared<rs1::srv::GetCubeCentre::Request>();
+      auto request = std::make_shared<rs1::srv::GetCubeCentre::Request>();
+      const glider::Pose pose_at_request = current_pose_;
 
-  //     sonar_client_->async_send_request(
-  //       request,
-  //       [this](rclcpp::Client<rs1::srv::GetCubeCentre>::SharedFuture future)
-  //       {
-  //         auto response = future.get();
-  //         if (response->success)
-  //         {
-  //           glider::Pose p;
-  //           p.x = response->centre.position.x;
-  //           p.y = response->centre.position.y;
-  //           p.z = response->centre.position.z;
+      sonar_client_->async_send_request(
+        request,
+        [this, pose_at_request](rclcpp::Client<rs1::srv::GetCubeCentre>::SharedFuture future)
+        {
+          const auto response = future.get();
+          if (!response->success) {
+            RCLCPP_WARN(this->get_logger(), "Sonar service: %s", response->message.c_str());
+            processing_->setCubeCentreUnavailable();
+            return;
+          }
 
-  //           processing_->setDetectedPooPose(p);
+          // Service gives an offset from the glider (forward, left, depth);
+          // convert to world using the pose from when we asked.
+          const double fwd = response->centre.position.x;
+          const double left = response->centre.position.y;
+          const double c = std::cos(pose_at_request.yaw);
+          const double s = std::sin(pose_at_request.yaw);
 
-  //           RCLCPP_INFO(this->get_logger(),
-  //             "Sonar centre received: (%.2f, %.2f, %.2f)",
-  //             p.x, p.y, p.z);
-  //         }
-  //         else
-  //         {
-  //           RCLCPP_WARN(this->get_logger(),
-  //             "Sonar service failed: %s", response->message.c_str());
-  //         }
-  //       });
-  //   }
-  //   else
-  //   {
-  //     RCLCPP_WARN(this->get_logger(), "Sonar service not ready yet");
-  //   }
-  //}
+          glider::Pose p;
+          p.x = pose_at_request.x + c * fwd - s * left;
+          p.y = pose_at_request.y + s * fwd + c * left;
+          p.z = pose_at_request.z - response->centre.position.z;
 
-  last_state = current_state;
-
+          processing_->setDetectedPooPose(p);
+          RCLCPP_INFO(this->get_logger(),
+            "Cube centre (world): (%.2f, %.2f, %.2f)", p.x, p.y, p.z);
+        });
+    } else {
+      RCLCPP_WARN_THROTTLE(
+        this->get_logger(), *this->get_clock(), 2000, "Sonar service not ready yet");
+    }
+  }
   // Convert processing command to ROS message
   geometry_msgs::msg::Twist cmd;
 

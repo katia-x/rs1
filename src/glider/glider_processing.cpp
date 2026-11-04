@@ -329,33 +329,82 @@ void GliderProcessing::handleAlign()
     return;
   }
 
-  Pose xy_target = activeTargetXY();
-  command_.vx = clamp(kp_xy_ * (xy_target.x - current_pose_.x), -max_xy_speed_, max_xy_speed_);
-  command_.vy = clamp(kp_xy_ * (xy_target.y - current_pose_.y), -max_xy_speed_, max_xy_speed_);
-
-  // hold height
-  // if (height_sensor_valid_) {
-  //   const double height_error = height_above_poo_ - align_height_;
-  //   command_.vz = clamp(kp_z_ * height_error, -max_z_speed_, max_z_speed_);
-  // } else {
+  // x/y only during ALIGN. command_ starts zeroed each tick, so waiting = hovering.
   command_.vz = 0.0;
-  //}
 
-  
-  
+  switch (align_phase_) {
 
-  // status_msg_ = detected_poo_valid_
-  //   ? "ALIGN: fine-tuning over sonar centre"
-  //   : "ALIGN: hovering (waiting for sonar)";
+    case AlignPhase::WAIT_DETECTION:
+    case AlignPhase::WAIT_CHECK: {
+      ++settle_ticks_;
+      const bool checking = (align_phase_ == AlignPhase::WAIT_CHECK);
 
-  // Once XY is good, go to final descent
-  if (/*detected_poo_valid_ && */xyClose(current_pose_, xy_target)) {
-    command_.vx = 0.0;
-    command_.vy = 0.0;
-    transition(State::FINAL_DESCEND);
+      // A request went out but no reply came back: count it as a failure.
+      if (cube_centre_requested_ &&
+        settle_ticks_ > kSettleTicks + kRequestTimeoutTicks)
+      {
+        setCubeCentreUnavailable();
+      }
+
+      // Cube repeatedly not visible: give up and retry the approach from safe height.
+      if (detection_failures_ >= kMaxFailures) {
+        status_msg_ = "ALIGN: cube not found, retrying approach";
+        transition(State::TAKEOFF);
+        return;
+      }
+
+      if (!new_detection_) {
+        status_msg_ = checking ? "ALIGN: verifying centre" : "ALIGN: waiting for cube centre";
+        return;
+      }
+
+      new_detection_ = false;
+      const double dist = std::hypot(
+        detected_poo_pose_.x - current_pose_.x,
+        detected_poo_pose_.y - current_pose_.y);
+
+      if (checking) {
+        // Second reading: are we actually over the centre?
+        if (dist <= 1.5 * align_tolerance_) {
+          status_msg_ = "ALIGN: centred, descending to pick up";
+          transition(State::FINAL_DESCEND);
+          return;
+        }
+        if (++align_attempts_ >= kMaxAttempts) {
+          status_msg_ = "ALIGN: could not centre, retrying approach";
+          transition(State::TAKEOFF);
+          return;
+        }
+      }
+
+      align_phase_ = AlignPhase::MOVE;
+      status_msg_ = "ALIGN: moving over cube";
+      return;
+    }
+
+    case AlignPhase::MOVE: {
+      const double ex = detected_poo_pose_.x - current_pose_.x;
+      const double ey = detected_poo_pose_.y - current_pose_.y;
+      const double dist = std::hypot(ex, ey);
+
+      if (dist <= align_tolerance_) {
+        align_phase_ = AlignPhase::WAIT_CHECK;
+        settle_ticks_ = 0;
+        cube_centre_requested_ = false;
+        new_detection_ = false;
+        status_msg_ = "ALIGN: over cube, settling";
+        return;
+      }
+
+      const double speed = std::min(kp_xy_ * dist, kAlignMaxSpeed);
+      command_.vx = speed * ex / dist;
+      command_.vy = speed * ey / dist;
+      status_msg_ = "ALIGN: moving over cube";
+      break;
+    }
   }
 
-  command_ = worldToBody(command_);
+  command_ = worldToBody(command_);   
 }
 
 /*
@@ -420,6 +469,7 @@ void GliderProcessing::handlePickup()
   command_ = VelocityCommand{};
 
   carrying_poo_ = true;
+  clearDetectedPooPose();
 
   status_msg_ =
     "PICKUP: poo collected";
@@ -563,6 +613,9 @@ void GliderProcessing::handleReturnHome()
  */
 void GliderProcessing::transition(State new_state)
 {
+  if (new_state == State::ALIGN) {
+    resetAlign();
+  }
   state_ = new_state;
 }
 
@@ -674,8 +727,41 @@ Pose GliderProcessing::activeTargetXY() const
 
 void GliderProcessing::setDetectedPooPose(const Pose & pose)
 {
+  if (state_ != State::ALIGN) {
+    return;  // late reply after we've moved on
+  }
   detected_poo_pose_ = pose;
   detected_poo_valid_ = true;
+  new_detection_ = true;
+  cube_centre_requested_ = false;
+  detection_failures_ = 0;
+}
+
+void GliderProcessing::setCubeCentreUnavailable()
+{
+  cube_centre_requested_ = false;
+  ++detection_failures_;
+  settle_ticks_ = 0;   // wait again before retrying
+}
+
+bool GliderProcessing::wantsCubeCentre() const
+{
+  return state_ == State::ALIGN &&
+         align_phase_ != AlignPhase::MOVE &&
+         !cube_centre_requested_ &&
+         !new_detection_ &&
+         settle_ticks_ >= kSettleTicks;
+}
+
+void GliderProcessing::resetAlign()
+{
+  align_phase_ = AlignPhase::WAIT_DETECTION;
+  cube_centre_requested_ = false;
+  new_detection_ = false;
+  align_attempts_ = 0;
+  detection_failures_ = 0;
+  settle_ticks_ = 0;
+  detected_poo_valid_ = false;
 }
 
 void GliderProcessing::clearDetectedPooPose()

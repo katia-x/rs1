@@ -80,6 +80,12 @@ public:
   void setDetectedPooPose(const Pose & pose);
   void clearDetectedPooPose();
 
+  // Cube-centre request handshake (used during ALIGN)
+  bool wantsCubeCentre() const;
+  void markCubeCentreRequested() { cube_centre_requested_ = true; }
+  void setCubeCentreUnavailable();
+  void setAlignTolerance(double tol) { align_tolerance_ = tol; }
+
   // Called at fixed rate
   std::pair<VelocityCommand, std::string> tick();
 
@@ -153,6 +159,24 @@ private:
 
   bool detected_poo_valid_{false};
   Pose detected_poo_pose_;
+
+  // cube centre alignment
+  enum class AlignPhase { WAIT_DETECTION, MOVE, WAIT_CHECK };
+  void resetAlign();
+
+  AlignPhase align_phase_{AlignPhase::WAIT_DETECTION};
+  bool cube_centre_requested_{false};
+  bool new_detection_{false};
+  int align_attempts_{0};
+  int detection_failures_{0};
+  int settle_ticks_{0};
+  double align_tolerance_{0.08};   // m, tight: the cube is only ~0.3 m wide
+
+  static constexpr int kSettleTicks = 20;          // ~1 s at 20 Hz control rate
+  static constexpr int kRequestTimeoutTicks = 60;  // ~3 s with no service reply
+  static constexpr int kMaxAttempts = 4;
+  static constexpr int kMaxFailures = 5;
+  static constexpr double kAlignMaxSpeed = 0.4;    // m/s
 
   // poo helper
   Pose activeTargetXY() const;
