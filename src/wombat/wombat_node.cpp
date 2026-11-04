@@ -23,18 +23,6 @@ WombatNode::WombatNode()
 	if (!std::isfinite(nav_unavailable_timeout_) || nav_unavailable_timeout_ <= 0.0) {
 		throw std::invalid_argument("nav_unavailable_timeout must be finite and positive");
 	}
-	// Override topics for manual control
-	const auto override_command_topic = declare_parameter<std::string>(
-		"manual_override_command_topic", "/husky1/manual_override_command");
-	const auto override_state_topic = declare_parameter<std::string>(
-		"manual_override_state_topic", "/husky1/manual_override");
-	const auto estop_command_topic = declare_parameter<std::string>(
-		"estop_command_topic", "/husky1/estop_command");
-	const auto estop_state_topic = declare_parameter<std::string>(
-		"estop_state_topic", "/husky1/estop");
-	const auto resume_command_topic = declare_parameter<std::string>(
-		"resume_command_topic", "/husky1/resume_command");
-
 	mission_client_ = create_client<rs1::srv::WombatNextGoal>("wombat_next_goal");
 	weed_goal_subscription_ = create_subscription<rs1::msg::WombatWeedGoal>(
 		"/wombat/weed_goal", rclcpp::QoS(1).transient_local(),
@@ -44,21 +32,11 @@ WombatNode::WombatNode()
 		std::bind(&WombatNode::status_callback, this, std::placeholders::_1));
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
-	override_state_publisher_ = create_publisher<std_msgs::msg::Bool>(
-		override_state_topic, rclcpp::QoS(1).transient_local());
-	override_subscription_ = create_subscription<std_msgs::msg::Bool>(
-		override_command_topic, rclcpp::QoS(10),
-		std::bind(&WombatNode::override_callback, this, std::placeholders::_1));
-	estop_state_publisher_ = create_publisher<std_msgs::msg::Bool>(
-		estop_state_topic, rclcpp::QoS(1).transient_local());
-	estop_subscription_ = create_subscription<std_msgs::msg::Bool>(
-		estop_command_topic, rclcpp::QoS(10),
-		std::bind(&WombatNode::estop_callback, this, std::placeholders::_1));
-	resume_subscription_ = create_subscription<std_msgs::msg::Bool>(
-		resume_command_topic, rclcpp::QoS(10),
-		std::bind(&WombatNode::resume_callback, this, std::placeholders::_1));
-	publish_override_state();
-	publish_estop_state();
+	gui_management_ = std::make_unique<GuiManagement>(
+		*this,
+		[this](bool enabled) { handle_override(enabled); },
+		[this]() { handle_estop(); },
+		[this]() { handle_resume(); });
 
 	mission_retry_timer_ = create_wall_timer(100ms, [this]() { timer_callback(); });
 }
@@ -69,7 +47,7 @@ void WombatNode::timer_callback()
 		return;
 	}
 
-	if (manual_override_ || estop_active_ || mission_request_in_flight_ ||
+	if (gui_management_->manual_override() || gui_management_->estop_active() || mission_request_in_flight_ ||
 		nav_goal_request_in_flight_ || nav_cancel_in_flight_) {
 		return;
 	}
@@ -162,14 +140,14 @@ void WombatNode::request_next_goal(std::uint8_t operation, std::uint64_t weed_id
 	mission_request_operation_ = operation;
 	mission_request_generation_ = mission_generation_;
 	const auto request_id = ++mission_request_id_;
-	const auto override_generation = override_generation_;
+	const auto request_override_generation = gui_management_->override_generation();
 	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
 	request->operation = operation;
 	request->weed_id = weed_id;
 	mission_client_->async_send_request(
-		request, [this, request_id, override_generation](
+		request, [this, request_id, request_override_generation](
 			rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future) {
-			handle_mission_goal(future, request_id, override_generation);
+			handle_mission_goal(future, request_id, request_override_generation);
 		});
 }
 
@@ -319,14 +297,15 @@ void WombatNode::send_navigation_goal(
 	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
 	const auto goal_generation = mission_generation_;
 	const auto request_id = ++nav_goal_request_id_;
-	const auto override_generation = override_generation_;
+	const auto request_override_generation = gui_management_->override_generation();
 	options.goal_response_callback =
-		[this, goal_generation, request_id, override_generation](NavigateGoalHandle::SharedPtr goal_handle) {
+		[this, goal_generation, request_id, request_override_generation](NavigateGoalHandle::SharedPtr goal_handle) {
 			if (request_id != nav_goal_request_id_) {
 				if (goal_handle) { navigation_client_->async_cancel_goal(goal_handle); }
 				return;
 			}
-			if (goal_generation != mission_generation_ || override_generation != override_generation_ ||
+			if (goal_generation != mission_generation_ ||
+				request_override_generation != gui_management_->override_generation() ||
 				mission_stopped()) {
 				nav_goal_request_in_flight_ = false;
 				if (goal_handle) { navigation_client_->async_cancel_goal(goal_handle); }
@@ -335,8 +314,9 @@ void WombatNode::send_navigation_goal(
 			handle_nav_goal_response(goal_handle);
 		};
 	options.result_callback =
-		[this, goal_generation, override_generation](const NavigateGoalHandle::WrappedResult & result) {
-			if (goal_generation == mission_generation_ && override_generation == override_generation_ &&
+		[this, goal_generation, request_override_generation](const NavigateGoalHandle::WrappedResult & result) {
+			if (goal_generation == mission_generation_ &&
+				request_override_generation == gui_management_->override_generation() &&
 				!mission_stopped()) {
 				handle_nav_result(result);
 			}
@@ -347,14 +327,14 @@ void WombatNode::send_navigation_goal(
 
 void WombatNode::handle_mission_goal(
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future,
-	std::uint64_t request_id, std::uint64_t override_generation)
+	std::uint64_t request_id, std::uint64_t request_override_generation)
 {
 	if (request_id != mission_request_id_) {
 		return;
 	}
 	mission_request_in_flight_ = false;
 	if (mission_stopped() || mission_request_generation_ != mission_generation_ ||
-		override_generation != override_generation_) {
+		request_override_generation != gui_management_->override_generation()) {
 		return;
 	}
 
@@ -364,7 +344,7 @@ void WombatNode::handle_mission_goal(
 			complete_mission();
 			return;
 		}
-		if (manual_override_ || estop_active_) {
+		if (gui_management_->manual_override() || gui_management_->estop_active()) {
 			return;
 		}
 		if (!response->success) {
@@ -406,7 +386,7 @@ void WombatNode::handle_nav_goal_response(NavigateGoalHandle::SharedPtr goal_han
 		handle_nav_failure();
 		return;
 	}
-	if (manual_override_ || estop_active_) {
+	if (gui_management_->manual_override() || gui_management_->estop_active()) {
 		navigation_client_->async_cancel_goal(goal_handle);
 		return;
 	}
@@ -430,7 +410,7 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 	if (nav_goal_request_in_flight_ || !active_goal_ ||
 		result.goal_id != active_goal_->get_goal_id()) { return; }
 	active_goal_.reset();
-	if (manual_override_ || estop_active_) {
+	if (gui_management_->manual_override() || gui_management_->estop_active()) {
 		return;
 	}
 	if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {
@@ -497,76 +477,23 @@ void WombatNode::abort_mission()
 		nav_unavailable_timeout_);
 }
 
-void WombatNode::override_callback(const std_msgs::msg::Bool::ConstSharedPtr message)
+void WombatNode::handle_override(bool enabled)
 {
-	if (!message || message->data == manual_override_) {
-		return;
-	}
-	if (!message->data && estop_active_) {
-		RCLCPP_WARN(get_logger(), "Ignoring automatic-mode request while E-stop is active");
-		return;
-	}
-	if (!message->data && resume_required_) {
-		RCLCPP_WARN(get_logger(), "Ignoring automatic-mode request; press Resume after releasing E-stop");
-		return;
-	}
-	manual_override_ = message->data;
-	++override_generation_;
-	if (manual_override_) {
+	if (enabled) {
 		cancel_active_goal();
-		RCLCPP_WARN(get_logger(),
-			"Manual override enabled; autonomous navigation stopped; Teleop may drive /husky1/cmd_vel");
 	} else {
-		RCLCPP_INFO(get_logger(), "Manual override disabled; autonomous navigation may resume");
 		request_next_goal(GoalRequest::REQUEST_NEXT_GOAL);
 	}
-	publish_override_state();
 }
 
-void WombatNode::estop_callback(const std_msgs::msg::Bool::ConstSharedPtr message)
+void WombatNode::handle_estop()
 {
-	if (!message || message->data == estop_active_) {
-		return;
-	}
-	estop_active_ = message->data;
-	++override_generation_;
-	if (estop_active_) {
-		estop_release_ready_ = false;
-		resume_required_ = true;
-		cancel_active_goal();
-		RCLCPP_ERROR(get_logger(), "E-stop enabled; autonomous navigation stopped");
-	} else {
-		estop_release_ready_ = true;
-		RCLCPP_WARN(get_logger(), "E-stop released; press Resume to re-enable autonomous navigation");
-	}
-	publish_estop_state();
+	cancel_active_goal();
 }
 
-void WombatNode::resume_callback(const std_msgs::msg::Bool::ConstSharedPtr message)
+void WombatNode::handle_resume()
 {
-	if (!message || !message->data || estop_active_ || !estop_release_ready_ || !resume_required_) {
-		return;
-	}
-	resume_required_ = false;
-	manual_override_ = false;
-	++override_generation_;
-	RCLCPP_INFO(get_logger(), "Resume accepted; autonomous navigation may resume");
-	publish_override_state();
 	request_next_goal(GoalRequest::REQUEST_NEXT_GOAL);
-}
-
-void WombatNode::publish_override_state()
-{
-	std_msgs::msg::Bool state;
-	state.data = manual_override_;
-	override_state_publisher_->publish(state);
-}
-
-void WombatNode::publish_estop_state()
-{
-	std_msgs::msg::Bool state;
-	state.data = estop_active_;
-	estop_state_publisher_->publish(state);
 }
 
 void WombatNode::cancel_active_goal()

@@ -48,7 +48,11 @@ ament_target_dependencies(
 )
 rosidl_target_interfaces(mission_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(wombat_node src/wombat/wombat_node.cpp)
+add_executable(wombat_node
+  src/wombat/wombat_node.cpp
+  src/gui_management/gui_management.cpp
+)
+target_include_directories(wombat_node PRIVATE src)
 ament_target_dependencies(
   wombat_node
   action_msgs
