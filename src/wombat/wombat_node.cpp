@@ -33,6 +33,16 @@ WombatNode::WombatNode()
 		std::bind(&WombatNode::status_callback, this, std::placeholders::_1));
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
+
+	weeds_removed_publisher_ = create_publisher<std_msgs::msg::UInt32>(
+		"/wombat/weeds_removed",
+		rclcpp::QoS(1).reliable().transient_local());
+
+	// Publish the initial zero.
+	std_msgs::msg::UInt32 initial_count;
+	initial_count.data = 0;
+	weeds_removed_publisher_->publish(initial_count);
+
 	mission_retry_timer_ = create_wall_timer(100ms, [this]() { timer_callback(); });
 }
 
@@ -60,30 +70,65 @@ void WombatNode::try_delete_weed()
 		weed_deletion_retry_pending_ = true;
 		return;
 	}
+
 	weed_deletion_retry_pending_ = false;
 	weed_deletion_in_flight_ = true;
 	++weed_deletion_attempts_;
+
+	const auto model_name = last_weed_name_;
+	const auto request_id = ++deletion_request_id_;
+
 	auto request = std::make_shared<DeleteEntity::Request>();
-	request->entity.name = last_weed_name_;
+	request->entity.name = model_name;
 	request->entity.type = ros_gz_interfaces::msg::Entity::MODEL;
-	delete_entity_client_->async_send_request(request,
-		[this](rclcpp::Client<DeleteEntity>::SharedFuture future) {
+
+	deletion_deadline_ = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+
+	const auto pending = delete_entity_client_->async_send_request(
+		request,
+		[this, model_name, request_id](
+			rclcpp::Client<DeleteEntity>::SharedFuture future)
+		{
+			bool removed = false;
+			try {
+				removed = future.get()->success;
+			} catch (const std::exception & error) {
+				RCLCPP_WARN(
+					get_logger(), "Deletion request for %s failed: %s",
+					model_name.c_str(), error.what());
+			}
+
+			// Count confirmed deletions, including late successful responses.
+			if (removed && removed_plant_names_.insert(model_name).second) {
+				RCLCPP_INFO(
+					get_logger(), "Removed %s; total plants removed: %zu",
+					model_name.c_str(), removed_plant_names_.size());
+
+				std_msgs::msg::UInt32 count;
+				count.data = static_cast<std::uint32_t>(removed_plant_names_.size());
+				weeds_removed_publisher_->publish(count);
+			}
+
+			// An old response must not change the current mission.
+			if (request_id != deletion_request_id_ || mission_stopped()) {
+				return;
+			}
+
 			weed_deletion_in_flight_ = false;
-			const auto response = future.get();
-			if (response->success) {
-				RCLCPP_INFO(get_logger(), "Deleted weed model %s on attempt %d",
-					last_weed_name_.c_str(), weed_deletion_attempts_);
+
+			if (removed) {
 				finish_weed_removal(true);
 			} else if (weed_deletion_attempts_ < 3) {
-				RCLCPP_WARN(get_logger(), "Failed to delete weed model %s on attempt %d; retrying",
-					last_weed_name_.c_str(), weed_deletion_attempts_);
 				weed_deletion_retry_pending_ = true;
 			} else {
-				RCLCPP_ERROR(get_logger(), "Failed to delete weed model %s after 3 attempts",
-					last_weed_name_.c_str());
+				RCLCPP_ERROR(
+					get_logger(), "Failed to delete %s after 3 attempts",
+					model_name.c_str());
 				finish_weed_removal(false);
 			}
 		});
+		
+	deletion_ros_request_id_ = pending.request_id;
 }
 
 void WombatNode::finish_weed_removal(bool removed)
@@ -103,6 +148,29 @@ void WombatNode::finish_weed_removal(bool removed)
 void WombatNode::timer_callback()
 {
 	if (mission_stopped()) {
+		return;
+	}
+
+	if (weed_deletion_in_flight_) {
+		if (std::chrono::steady_clock::now() < deletion_deadline_) {
+			return;
+		}
+
+		RCLCPP_WARN(
+			get_logger(), "Deletion timed out for %s (attempt %d/3)",
+			last_weed_name_.c_str(), weed_deletion_attempts_);
+
+		// Release the unanswered ROS request and invalidate its callback.
+		delete_entity_client_->remove_pending_request(
+			deletion_ros_request_id_);
+		++deletion_request_id_;
+		weed_deletion_in_flight_ = false;
+
+		if (weed_deletion_attempts_ < 3) {
+			weed_deletion_retry_pending_ = true;
+		} else {
+			finish_weed_removal(false);
+		}
 		return;
 	}
 
@@ -304,6 +372,12 @@ void WombatNode::reset_for_new_region()
 		active_goal_.reset();
 	}
 
+	if (weed_deletion_in_flight_) {
+		delete_entity_client_->remove_pending_request(
+			deletion_ros_request_id_);
+	}
+
+	++deletion_request_id_;
 	nav_unavailable = false;
 	nav_unavailable_since_ = {};
 	canceling_goal_.reset();

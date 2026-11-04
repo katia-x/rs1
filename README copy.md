@@ -297,3 +297,21 @@ If you get an error like:
 ```bash
 export QT_QPA_PLATFORM=xcb
 ```
+
+ros2 topic pub --once /region geometry_msgs/msg/PoseArray "{header: {frame_id: map}, poses: [
+  {position: {x: -5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}},
+  {position: {x:  5.0, y: -5.0, z: 0.0}, orientation: {w: 1.0}},
+  {position: {x:  5.0, y:  5.0, z: 0.0}, orientation: {w: 1.0}},
+  {position: {x: -5.0, y:  5.0, z: 0.0}, orientation: {w: 1.0}}
+]}"
+
+ros2 topic pub --once /region geometry_msgs/msg/PoseArray \
+'{
+  header: {frame_id: map},
+  poses: [
+    {position: {x: 3.0, y: 0.5, z: 0.0}, orientation: {w: 1.0}},
+    {position: {x: 12.5, y: 0.5, z: 0.0}, orientation: {w: 1.0}},
+    {position: {x: 12.5, y: 11.5, z: 0.0}, orientation: {w: 1.0}},
+    {position: {x: 3.0, y: 11.5, z: 0.0}, orientation: {w: 1.0}}
+  ]
+}'

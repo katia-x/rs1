@@ -8,6 +8,7 @@
 #include <ros_gz_interfaces/srv/delete_entity.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <rclcpp_action/rclcpp_action.hpp>
+#include <std_msgs/msg/u_int32.hpp>
 
 #include "rs1/msg/wombat_status.hpp"
 #include "rs1/msg/wombat_weed_goal.hpp"
@@ -17,6 +18,7 @@
 #include <chrono>
 #include <cstdint>
 #include <string>
+#include <unordered_set>
 
 class WombatNode : public rclcpp::Node
 {
@@ -62,7 +64,7 @@ private:
 	void dispatch_pending_weed_goal();
 	void handle_nav_cancel(rclcpp_action::Client<NavigateToPose>::CancelResponse::SharedPtr response);
 	void send_navigation_goal(const geometry_msgs::msg::PoseStamped & pose, bool is_weed,
-		std::uint64_t weed_id, const std::string & weed_name = {});
+	std::uint64_t weed_id, const std::string & weed_name = {});
 	void reset_for_new_region();
 	void handle_nav_failure();
 	void handle_mission_goal(rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future);
@@ -80,6 +82,7 @@ private:
 	rclcpp::Client<DeleteEntity>::SharedPtr delete_entity_client_;
 	rclcpp::Subscription<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_subscription_;
 	rclcpp::Subscription<rs1::msg::WombatStatus>::SharedPtr status_subscription_;
+	rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr weeds_removed_publisher_;
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
 	NavigateGoalHandle::SharedPtr active_goal_;
 	NavigateGoalHandle::SharedPtr canceling_goal_;
@@ -105,6 +108,10 @@ private:
 	std::chrono::steady_clock::time_point lane_wait_until_{};
 	bool nav_unavailable{false};
 	std::chrono::steady_clock::time_point nav_unavailable_since_{};
+	std::unordered_set<std::string> removed_plant_names_;
+	std::uint64_t deletion_request_id_{0};
+	std::chrono::steady_clock::time_point deletion_deadline_{};
+	std::int64_t deletion_ros_request_id_{0};
 };
 
 #endif
