@@ -302,7 +302,7 @@ def generate_launch_description():
             'truck_x': -16.5,
             'truck_y': 16.5,
             'truck_z': 2.0,
-            'safe_height': 15.0,
+            'safe_height': 10.0,
             'pickup_height': 0.4,
             'control_rate': 20.0,
         }],

@@ -335,7 +335,7 @@ void GliderProcessing::handleDescend()
   }
 
   const DescendStatus result = descendTo(
-    HeightRef::GROUND, align_height_, goal->pose.z + align_height_, true);
+    HeightRef::SURFACE, align_height_, goal->pose.z + align_height_, true);
 
   if (result == DescendStatus::BLOCKED) {
     status_msg_ = "DESCEND: obstacle below, sliding sideways";

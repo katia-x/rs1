@@ -117,7 +117,7 @@ private:
   static constexpr double kSlideSpeed = 0.5;        // m/s
   static constexpr double kSlideLegLength = 3.0;    // m before turning 90 degrees
   static constexpr int kMaxSlideLegs = 4;
-  static constexpr double kMaxSlideFromGoal = 1.5;  // give up if the clear column is further than this
+  static constexpr double kMaxSlideFromGoal = 3.0;  // give up if the clear column is further than this
 
   static constexpr double kMinPickupZ = 0.35;       // never descend below this for pickup
   static constexpr double kNoFloor = -1.0e9;

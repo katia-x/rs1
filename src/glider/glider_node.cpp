@@ -27,7 +27,7 @@ GliderNode::GliderNode()
   this->declare_parameter("truck_y", 16.5);
   this->declare_parameter("truck_z", 2.0);
 
-  this->declare_parameter("safe_height", 15.0);
+  this->declare_parameter("safe_height", 10.0);
   this->declare_parameter("pickup_height", 0.4);
   this->declare_parameter("align_height", 3.0);
 
