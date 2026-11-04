@@ -17,6 +17,8 @@ SonarNode::SonarNode()
   this->declare_parameter("high_point_margin", 0.08);
   this->declare_parameter("min_points", 30);
   this->declare_parameter("min_high_points", 10);
+  this->declare_parameter("cube_search_radius", 1.5);
+  this->declare_parameter("cube_max_age", 1.0);
 
   cloud_topic_ = this->get_parameter("cloud_topic").as_string();
   max_lateral_distance_ = this->get_parameter("max_lateral_distance").as_double();
@@ -26,6 +28,14 @@ SonarNode::SonarNode()
   high_point_margin_ = this->get_parameter("high_point_margin").as_double();
   min_points_ = this->get_parameter("min_points").as_int();
   min_high_points_ = this->get_parameter("min_high_points").as_int();
+
+  cube_search_radius_ = this->get_parameter("cube_search_radius").as_double();
+  cube_max_age_ = this->get_parameter("cube_max_age").as_double();
+
+  cube_service_ = this->create_service<rs1::srv::GetCubeCentre>(
+    "/glider/sonar",
+    std::bind(&SonarNode::getCubeCentre, this,
+            std::placeholders::_1, std::placeholders::_2));
 
   cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     cloud_topic_, 10,
@@ -115,6 +125,45 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
   const double high_range = saw_high ? closest : floor;
 
   // ------------------------------------------------------------------
+  // Cube centre: centroid of the "high" points (only when a cube is seen)
+  // ------------------------------------------------------------------
+  latest_cube_.valid = false;
+  if (saw_high) {
+    sensor_msgs::PointCloud2ConstIterator<float> cx(*msg, "x");
+    sensor_msgs::PointCloud2ConstIterator<float> cy(*msg, "y");
+    sensor_msgs::PointCloud2ConstIterator<float> cz(*msg, "z");
+
+    double sum_y = 0.0, sum_z = 0.0;
+    size_t count = 0;
+    for (; cx != cx.end(); ++cx, ++cy, ++cz) {
+      const double d = static_cast<double>(*cx);
+      const double y = static_cast<double>(*cy);
+      const double z = static_cast<double>(*cz);
+
+      if (!std::isfinite(d) || !std::isfinite(y) || !std::isfinite(z)) {
+        continue;
+      }
+      if (d < min_range_ || d > floor - high_point_margin_) {
+        continue;  // not closer than the floor, so not part of the cube
+      }
+      if (std::hypot(y, z) > cube_search_radius_) {
+        continue;
+      }
+      sum_y += y;
+      sum_z += z;
+      ++count;
+    }
+
+    if (count >= static_cast<size_t>(min_high_points_)) {
+      latest_cube_.valid = true;
+      latest_cube_.forward = sum_z / static_cast<double>(count);
+      latest_cube_.left = sum_y / static_cast<double>(count);
+      latest_cube_.depth = closest;
+      latest_cube_.stamp = this->now();
+    }
+  }
+
+  // ------------------------------------------------------------------
   // Publish
   // ------------------------------------------------------------------
   sensor_msgs::msg::Range range_msg;
@@ -142,6 +191,26 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
     floor_ranges.size(), centre_ranges.size());
 }
 
+void SonarNode::getCubeCentre(
+  const std::shared_ptr<rs1::srv::GetCubeCentre::Request> /*request*/,
+  std::shared_ptr<rs1::srv::GetCubeCentre::Response> response)
+{
+  const bool fresh = latest_cube_.valid &&
+    (this->now() - latest_cube_.stamp).seconds() <= cube_max_age_;
+
+  if (!fresh) {
+    response->success = false;
+    response->message = "No cube currently visible";
+    return;
+  }
+
+  response->success = true;
+  response->message = "ok";
+  response->centre.position.x = latest_cube_.forward;  // body frame, forward
+  response->centre.position.y = latest_cube_.left;     // body frame, left
+  response->centre.position.z = latest_cube_.depth;    // distance down to cube top
+  response->centre.orientation.w = 1.0;
+}
 
 int main(int argc, char ** argv)
 {

@@ -9,6 +9,7 @@
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32.hpp"
+#include "rs1/srv/get_cube_centre.hpp"
 
 class SonarNode : public rclcpp::Node
 {
@@ -16,6 +17,27 @@ public:
   SonarNode();
 
 private:
+
+  void getCubeCentre(
+  const std::shared_ptr<rs1::srv::GetCubeCentre::Request> request,
+  std::shared_ptr<rs1::srv::GetCubeCentre::Response> response);
+
+  double cube_search_radius_{1.5};  // how far from the camera axis to look for cube points
+  double cube_max_age_{1.0};        // s; older detections are treated as "no cube"
+
+  struct CubeCentre
+  {
+    bool valid{false};
+    double forward{0.0};
+    double left{0.0};
+    double depth{0.0};
+    rclcpp::Time stamp{0, 0, RCL_ROS_TIME};
+  };
+  CubeCentre latest_cube_;
+
+  rclcpp::Service<rs1::srv::GetCubeCentre>::SharedPtr cube_service_;
+
+  
   void cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg);
 
   std::string cloud_topic_;
