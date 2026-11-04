@@ -344,18 +344,23 @@ void GliderProcessing::handleDescend()
     }
     return;
   }
-
+  // Path is clear, but only accept the column if it is still near the goal.
+  // Otherwise keep sliding to look for a closer clear spot.
+  if (distXY(current_pose_, goal->pose) > kMaxSlideFromGoal) {
+    command_.vz = 0.0;   // do not descend while searching
+    status_msg_ = "DESCEND: clear but too far from poo, sliding for closer spot";
+    if (!slideClear()) {
+      abandonPoo("DESCEND: no clear way down near poo");
+    }
+    return;
+  }
   sliding_ = false;
   moveXY(column_xy_);   // hold the (possibly shifted) descent column
   status_msg_ = "DESCEND: descending to align height";
 
   if (result == DescendStatus::ARRIVED) {
-    if (distXY(current_pose_, goal->pose) > kMaxSlideFromGoal) {
-      abandonPoo("DESCEND: poo is under an obstacle");
-      return;
+      transition(State::ALIGN);
     }
-    transition(State::ALIGN);
-  }
 }
 
 
