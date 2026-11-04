@@ -24,6 +24,7 @@ find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WombatWeedGoal.msg"
   "msg/WombatStatus.msg"
+  "msg/WombatState.msg"
   "srv/WombatNextGoal.srv"
   DEPENDENCIES geometry_msgs
 )

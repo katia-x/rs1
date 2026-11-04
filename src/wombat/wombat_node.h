@@ -9,6 +9,7 @@
 #include <std_msgs/msg/bool.hpp>
 
 #include "rs1/msg/wombat_status.hpp"
+#include "rs1/msg/wombat_state.hpp"
 #include "rs1/msg/wombat_weed_goal.hpp"
 #include "rs1/srv/wombat_next_goal.hpp"
 #include "../gui_management/gui_management.h"
@@ -51,6 +52,8 @@ private:
 	};
 
 	void timer_callback();
+	void publish_state();
+	void set_state(State state);
 	void request_next_goal(std::uint8_t operation, std::uint64_t weed_id = 0);
 	void queue_request(std::uint8_t operation, std::uint64_t weed_id = 0);
 	void weed_goal_callback(const rs1::msg::WombatWeedGoal::SharedPtr message);
@@ -82,6 +85,7 @@ private:
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedPtr mission_client_;
 	rclcpp::Subscription<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_subscription_;
 	rclcpp::Subscription<rs1::msg::WombatStatus>::SharedPtr status_subscription_;
+	rclcpp::Publisher<rs1::msg::WombatState>::SharedPtr state_publisher_;
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
 	NavigateGoalHandle::SharedPtr active_goal_;
 	NavigateGoalHandle::SharedPtr canceling_goal_;
@@ -90,6 +94,7 @@ private:
 	bool last_goal_is_weed_{false};
 	std::uint64_t last_weed_id_{0};
 	rclcpp::TimerBase::SharedPtr mission_retry_timer_;
+	rclcpp::TimerBase::SharedPtr state_timer_;
 	bool mission_request_in_flight_{false};
 	std::unique_ptr<GuiManagement> gui_management_;
 	std::uint8_t mission_request_operation_{rs1::srv::WombatNextGoal::Request::REQUEST_NEXT_GOAL};

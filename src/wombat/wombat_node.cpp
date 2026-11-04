@@ -30,6 +30,8 @@ WombatNode::WombatNode()
 	status_subscription_ = create_subscription<rs1::msg::WombatStatus>(
 		"/wombat/status", rclcpp::QoS(1).transient_local(),
 		std::bind(&WombatNode::status_callback, this, std::placeholders::_1));
+	state_publisher_ = create_publisher<rs1::msg::WombatState>(
+		"/wombat/state", rclcpp::QoS(1).transient_local());
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
 	gui_management_ = std::make_unique<GuiManagement>(
@@ -39,6 +41,25 @@ WombatNode::WombatNode()
 		[this]() { handle_resume(); });
 
 	mission_retry_timer_ = create_wall_timer(100ms, [this]() { timer_callback(); });
+	state_timer_ = create_wall_timer(1s, [this]() { publish_state(); });
+	publish_state();
+}
+
+void WombatNode::publish_state()
+{
+	rs1::msg::WombatState message;
+	message.state = static_cast<std::uint8_t>(state_);
+	message.mission_generation = mission_generation_;
+	state_publisher_->publish(message);
+}
+
+void WombatNode::set_state(State state)
+{
+	if (state_ == state) {
+		return;
+	}
+	state_ = state;
+	publish_state();
 }
 
 void WombatNode::timer_callback()
@@ -94,7 +115,7 @@ void WombatNode::timer_callback()
 		return;
 	case State::PreLaneWait:
 		if (std::chrono::steady_clock::now() < lane_wait_until_) { return; }
-		state_ = State::Searching;
+		set_state(State::Searching);
 		[[fallthrough]];
 	case State::WaitingForRegion:
 		if (!pending_request_.pending) { pending_request_.pending = true; }
@@ -191,7 +212,7 @@ void WombatNode::dispatch_pending_weed_goal()
 	}
 	const auto weed_goal = pending_weed_goal_.goal;
 	pending_weed_goal_.pending = false;
-	state_ = State::Searching;
+	set_state(State::Searching);
 	RCLCPP_INFO(get_logger(), "Sending weed goal %llu to Nav2",
 		static_cast<unsigned long long>(weed_goal.weed_id));
 	goal_failures_ = 0;
@@ -222,7 +243,7 @@ void WombatNode::complete_mission()
 	nav_unavailable_since_ = {};
 	canceling_goal_.reset();
 	nav_cancel_in_flight_ = false;
-	state_ = State::Complete;
+	set_state(State::Complete);
 	pending_weed_goal_.pending = false;
 	pending_request_.pending = false;
 }
@@ -257,7 +278,7 @@ void WombatNode::reset_for_new_region()
 	last_goal_is_weed_ = false;
 	last_weed_id_ = 0;
 	last_navigation_goal_valid_ = false;
-	state_ = State::WaitingForRegion;
+	set_state(State::WaitingForRegion);
 }
 
 void WombatNode::send_navigation_goal(
@@ -348,7 +369,7 @@ void WombatNode::handle_mission_goal(
 			return;
 		}
 		if (!response->success) {
-			state_ = State::WaitingForRegion;
+			set_state(State::WaitingForRegion);
 			pending_request_.pending = true;
 			return;
 		}
@@ -362,17 +383,17 @@ void WombatNode::handle_mission_goal(
 			response->is_weed ? "true" : "false", response->is_turn ? "true" : "false",
 			response->is_lane_start ? "true" : "false");
 		if (response->is_lane_start) {
-			state_ = State::ApproachingStart;
+			set_state(State::ApproachingStart);
 		} else if (response->is_turn) {
-			state_ = State::Turning;
+			set_state(State::Turning);
 		} else {
-			state_ = State::Searching;
+			set_state(State::Searching);
 		}
 		send_navigation_goal(response->goal, response->is_weed, response->weed_id);
 	} catch (const std::exception & error) {
 		mission_request_in_flight_ = false;
 		RCLCPP_WARN(get_logger(), "Mission service call failed: %s", error.what());
-		state_ = State::Recovery;
+		set_state(State::Recovery);
 		queue_request(mission_request_operation_, last_weed_id_);
 	}
 }
@@ -382,7 +403,7 @@ void WombatNode::handle_nav_goal_response(NavigateGoalHandle::SharedPtr goal_han
 	nav_goal_request_in_flight_ = false;
 	if (!goal_handle) {
 		RCLCPP_ERROR(get_logger(), "Nav2 rejected the goal");
-		state_ = State::Recovery;
+		set_state(State::Recovery);
 		handle_nav_failure();
 		return;
 	}
@@ -418,9 +439,9 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 		goal_failures_ = 0;
 		if (last_goal_is_weed_) {
 			queue_request(GoalRequest::WEED_HANDLED, last_weed_id_);
-			state_ = State::Searching;
+			set_state(State::Searching);
 		} else if (state_ == State::ApproachingStart || state_ == State::Turning) {
-			state_ = State::PreLaneWait;
+			set_state(State::PreLaneWait);
 			lane_wait_until_ = std::chrono::steady_clock::now() +
 				std::chrono::duration_cast<std::chrono::steady_clock::duration>(
 					std::chrono::duration<double>(lane_start_wait_duration_));
@@ -432,7 +453,7 @@ void WombatNode::handle_nav_result(const NavigateGoalHandle::WrappedResult & res
 	}
 		RCLCPP_WARN(get_logger(), "Nav2 failed to reach the goal, result_code=%d",
 		static_cast<int>(result.code));
-	state_ = State::Recovery;
+	set_state(State::Recovery);
 	handle_nav_failure();
 }
 
@@ -443,7 +464,7 @@ void WombatNode::handle_nav_failure()
 		RCLCPP_WARN(get_logger(), "Retrying navigation goal (%zu/%d)",
 			goal_failures_, max_goal_retries_);
 		if (last_goal_is_weed_ && last_navigation_goal_valid_) {
-			state_ = State::Searching;
+			set_state(State::Searching);
 			send_navigation_goal(last_navigation_goal_, true, last_weed_id_);
 			return;
 		}
@@ -470,7 +491,7 @@ void WombatNode::abort_mission()
 	complete_mission();
 
 	last_navigation_goal_valid_ = false;
-	state_ = State::Abort;
+	set_state(State::Abort);
 
 	RCLCPP_ERROR(
 		get_logger(), "Mission aborted: Nav2 unavailable for %.1f seconds",
