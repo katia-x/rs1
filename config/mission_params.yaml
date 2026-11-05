@@ -1,7 +1,7 @@
 mission_node:
   ros__parameters:
     # Startup settings for weed estimation and search navigation.
-    search_lane_spacing: 3.0
+    search_lane_spacing: 2.0
     location_tolerance: 0.25
     # Debug only: does not publish to Nav2 or alter obstacle costs.
     rock:
