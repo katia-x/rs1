@@ -4,6 +4,7 @@
 #include <nav2_msgs/action/navigate_to_pose.hpp>
 #include <action_msgs/srv/cancel_goal.hpp>
 #include <geometry_msgs/msg/pose_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <ros_gz_interfaces/msg/entity.hpp>
 #include <ros_gz_interfaces/srv/delete_entity.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -16,6 +17,7 @@
 #include "rs1/msg/wombat_weed_goal.hpp"
 #include "rs1/srv/wombat_next_goal.hpp"
 #include "../gui_management/gui_management.h"
+#include "rs1/msg/glider_goal.hpp"
 
 #include <memory>
 #include <chrono>
@@ -23,12 +25,16 @@
 #include <string>
 #include <unordered_set>
 
+#include "platform.h"
+
 class WombatNode : public rclcpp::Node
 {
 public:
 	WombatNode();
 
 private:
+	Platform platform_;
+
 	using NavigateToPose = nav2_msgs::action::NavigateToPose;
 	using NavigateGoalHandle = rclcpp_action::ClientGoalHandle<NavigateToPose>;
 	using DeleteEntity = ros_gz_interfaces::srv::DeleteEntity;
@@ -62,6 +68,7 @@ private:
 	void request_next_goal(std::uint8_t operation, std::uint64_t weed_id = 0);
 	void queue_request(std::uint8_t operation, std::uint64_t weed_id = 0);
 	void weed_goal_callback(const rs1::msg::WombatWeedGoal::SharedPtr message);
+	void odometry_callback(const nav_msgs::msg::Odometry::SharedPtr message);
 	void status_callback(const rs1::msg::WombatStatus::SharedPtr message);
 	void complete_mission();
 	bool mission_stopped() const;
@@ -79,6 +86,7 @@ private:
 	void handle_nav_result(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result);
 	void try_delete_weed();
 	void finish_weed_removal(bool removed);
+	void spawn_poo_if_due();
 	void handle_override(bool enabled);
 	void handle_estop();
 	void handle_resume();
@@ -92,9 +100,11 @@ private:
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedPtr mission_client_;
 	rclcpp::Client<DeleteEntity>::SharedPtr delete_entity_client_;
 	rclcpp::Subscription<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_subscription_;
+	rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_subscription_;
 	rclcpp::Subscription<rs1::msg::WombatStatus>::SharedPtr status_subscription_;
 	rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr weeds_removed_publisher_;
 	rclcpp::Publisher<rs1::msg::WombatState>::SharedPtr state_publisher_;
+	rclcpp::Publisher<rs1::msg::GliderGoal>::SharedPtr trajectory_goals_publisher_;
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
 	NavigateGoalHandle::SharedPtr active_goal_;
 	NavigateGoalHandle::SharedPtr canceling_goal_;
@@ -128,6 +138,9 @@ private:
 	std::uint64_t deletion_request_id_{0};
 	std::chrono::steady_clock::time_point deletion_deadline_{};
 	std::int64_t deletion_ros_request_id_{0};
+	nav_msgs::msg::Odometry latest_husky_odometry_;
+	std::size_t weeds_since_last_poo_{0};
+	std::size_t poo_count_{0};
 };
 
 #endif
