@@ -104,7 +104,7 @@ When enabled, the Wombat node cancels/stops
 autonomous navigation; the existing Teleop panel continues publishing
 `geometry_msgs/msg/Twist` directly to `/husky1/cmd_vel`.
 The Wombat node publishes the cumulative number of confirmed eaten weeds on
-`/wombat/weeds_eaten` as `std_msgs/msg/UInt32`. The value is latched so a
+`/wombat/weeds_removed` as `std_msgs/msg/UInt32`. The value is latched so a
 Foxglove panel receives the current count when it connects.
 The operator panel also accepts a custom map background image URL. The image
 is stretched over the configured `-10..10` metre viewport at 80% opacity and

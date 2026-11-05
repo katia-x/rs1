@@ -14,7 +14,7 @@ WombatNode::WombatNode()
   lane_start_wait_duration_(declare_parameter("lane_start_wait_duration", 1.0)),
   max_goal_retries_(declare_parameter("max_goal_retries", 3)),
   nav_unavailable_timeout_(declare_parameter("nav_unavailable_timeout", 60.0)),
-  weeds_eaten_topic_(declare_parameter("weeds_eaten_topic", "/wombat/weeds_eaten"))
+  weeds_removed_topic_(declare_parameter("weeds_removed_topic", "/wombat/weeds_removed"))
 {
 	if (!std::isfinite(lane_start_wait_duration_) || lane_start_wait_duration_ < 0.0) {
 		throw std::invalid_argument("lane_start_wait_duration must be finite and non-negative");
@@ -44,14 +44,14 @@ WombatNode::WombatNode()
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
 
-	weeds_eaten_publisher_ = create_publisher<std_msgs::msg::UInt32>(
-		weeds_eaten_topic_,
+	weeds_removed_publisher_ = create_publisher<std_msgs::msg::UInt32>(
+		weeds_removed_topic_,
 		rclcpp::QoS(1).reliable().transient_local());
 
 	// Publish the initial zero.
 	std_msgs::msg::UInt32 initial_count;
 	initial_count.data = 0;
-	weeds_eaten_publisher_->publish(initial_count);
+	weeds_removed_publisher_->publish(initial_count);
     
 	gui_management_ = std::make_unique<GuiManagement>(
 		*this,

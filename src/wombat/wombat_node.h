@@ -96,14 +96,14 @@ private:
 	const double lane_start_wait_duration_;
 	const int max_goal_retries_;
 	const double nav_unavailable_timeout_;
-	const std::string weeds_eaten_topic_;
+	const std::string weeds_removed_topic_;
 
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedPtr mission_client_;
 	rclcpp::Client<DeleteEntity>::SharedPtr delete_entity_client_;
 	rclcpp::Subscription<rs1::msg::WombatWeedGoal>::SharedPtr weed_goal_subscription_;
 	rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_subscription_;
 	rclcpp::Subscription<rs1::msg::WombatStatus>::SharedPtr status_subscription_;
-	rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr weeds_eaten_publisher_;
+	rclcpp::Publisher<std_msgs::msg::UInt32>::SharedPtr weeds_removed_publisher_;
 	rclcpp::Publisher<rs1::msg::WombatState>::SharedPtr state_publisher_;
 	rclcpp::Publisher<rs1::msg::GliderGoal>::SharedPtr trajectory_goals_publisher_;
 	rclcpp_action::Client<NavigateToPose>::SharedPtr navigation_client_;
