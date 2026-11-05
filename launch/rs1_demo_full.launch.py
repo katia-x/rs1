@@ -383,7 +383,7 @@ def generate_launch_description():
         'worlds',
         PythonExpression([
             "'", world_file, "' if '", world_file, "' else (",
-            "'rs1_terrain.config' if '", LaunchConfiguration('world'),
+            "'rs1_terrain.sdf' if '", LaunchConfiguration('world'),
             "' == 'rs1_terrain' else '", LaunchConfiguration('world'), ".sdf')",
         ]),
     ])
@@ -417,6 +417,14 @@ def generate_launch_description():
             'config_file': PathJoinSubstitution([config_path, 'gazebo_bridge_clock.yaml']),
             'use_sim_time': use_sim_time,
         }],
+    ))
+
+    ld.add_action(Node(
+        package='ros_ign_bridge',
+        executable='parameter_bridge',
+        name='ros_gz_bridge_services',
+        output='screen',
+        arguments=['/world/rs1_terrain/remove@ros_gz_interfaces/srv/DeleteEntity'],
     ))
 
     add_robot(
@@ -501,14 +509,14 @@ def generate_launch_description():
         start_delay=15.0,
     )
 
-    add_navigation_instance(
-        ld,
-        pkg_path=pkg_path,
-        use_sim_time=use_sim_time,
-        robot_arg='parrot',
-        robot_namespace='parrot1',
-        start_delay=10.0,
-    )
+    # add_navigation_instance(
+    #     ld,
+    #     pkg_path=pkg_path,
+    #     use_sim_time=use_sim_time,
+    #     robot_arg='parrot',
+    #     robot_namespace='parrot1',
+    #     start_delay=10.0,
+    # )
 
     add_rviz_instance(
         ld,
@@ -553,6 +561,7 @@ def generate_launch_description():
             'use_sim_time': use_sim_time,
             'global_frame': 'map',
             'wombat_base_frame': 'husky1_base_link',
+            'plant_catalog_file': PathJoinSubstitution([config_path, 'plant_catalog.txt']),
         }],
         remappings=[
             ('/tf', '/husky1/tf'),
