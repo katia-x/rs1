@@ -85,8 +85,9 @@ rectangle before publishing `/region`; a third click starts a new rectangle.
 The operator panel observes `/husky1/manual_override` and `/husky1/estop`,
 `/husky1/weed_estimate_markers`, `/husky1/target_weed_marker`, and
 `/husky1/tf` and `/husky1/tf_static`. The map resolves the
-`map -> husky1_base_link` transform chain as the live Wombat location and
-retains up to 1,000 positions as a dashed trail.
+`map -> husky1_base_link` transform chain by default as the live Wombat
+location and retains up to 1,000 positions as a dashed trail. Configure the
+panel's **Base frame** field when using a different robot frame.
 The trail can be cleared independently. The operator panel provides a
 **Manual Override** toggle (which changes to **Automatic**), an independent
 **E-stop** toggle, and **Resume**. E-stop publishes to

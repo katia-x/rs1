@@ -10,6 +10,7 @@ type Point = { x: number; y: number };
 type EstopCycle = "idle" | "active" | "released";
 type PanelState = {
   globalFrame?: string;
+  baseFrame?: string;
   regionTopic?: string;
   estimateTopic?: string;
   permanentTopic?: string;
@@ -141,18 +142,25 @@ function resolveTransform(
   sourceFrame: string,
   targetFrame: string,
 ): Point | undefined {
+  const normalizeFrame = (frame: string) => frame.replace(/^\/+/, "");
+  const normalizedSourceFrame = normalizeFrame(sourceFrame);
+  const normalizedTargetFrame = normalizeFrame(targetFrame);
   const queue: Array<{ frame: string; point: Point; yaw: number }> = [
-    { frame: sourceFrame, point: { x: 0, y: 0 }, yaw: 0 },
+    { frame: normalizedSourceFrame, point: { x: 0, y: 0 }, yaw: 0 },
   ];
-  const visited = new Set([sourceFrame]);
+  const visited = new Set([normalizedSourceFrame]);
   while (queue.length > 0) {
     const current = queue.shift()!;
-    if (current.frame === targetFrame) {
+    if (current.frame === normalizedTargetFrame) {
       return current.point;
     }
     for (const transform of transforms) {
-      const parent = transform.header?.frame_id;
-      const child = transform.child_frame_id;
+      const parent = transform.header?.frame_id
+        ? normalizeFrame(transform.header.frame_id)
+        : undefined;
+      const child = transform.child_frame_id
+        ? normalizeFrame(transform.child_frame_id)
+        : undefined;
       const translation = transform.transform?.translation;
       if (
         !parent ||
@@ -198,6 +206,9 @@ function OperatorPanel({
   const initialState = (context.initialState ?? {}) as PanelState;
   const [globalFrame, setGlobalFrame] = useState(
     initialState.globalFrame ?? "map",
+  );
+  const [baseFrame, setBaseFrame] = useState(
+    initialState.baseFrame ?? "husky1_base_link",
   );
   const [regionTopic, setRegionTopic] = useState(
     initialState.regionTopic ?? "/region",
@@ -249,6 +260,12 @@ function OperatorPanel({
     setWombatTrail([]);
     context.onRender = (renderState, done) => {
       const events = (renderState.currentFrame ?? []) as FrameEvent[];
+      if (renderState.didSeek) {
+        transforms.current = [];
+        lastTrailPoint.current = undefined;
+        setWombat(undefined);
+        setWombatTrail([]);
+      }
       const latest = (topic: string) => {
         const matching = events.filter((event) => event.topic === topic);
         return matching[matching.length - 1];
@@ -329,7 +346,7 @@ function OperatorPanel({
       const position = resolveTransform(
         transforms.current,
         globalFrame,
-        "husky1_base_link",
+        baseFrame,
       );
       if (position) {
         setWombat(position);
@@ -384,6 +401,7 @@ function OperatorPanel({
     estimateTopic,
     permanentTopic,
     globalFrame,
+    baseFrame,
     overrideTopic,
     estopTopic,
     estopCycle,
@@ -396,6 +414,7 @@ function OperatorPanel({
   const saveState = () =>
     context.saveState({
       globalFrame,
+      baseFrame,
       regionTopic,
       estimateTopic,
       permanentTopic,
@@ -488,6 +507,14 @@ function OperatorPanel({
           <input
             value={globalFrame}
             onChange={(event) => setGlobalFrame(event.target.value)}
+            onBlur={saveState}
+          />
+        </label>
+        <label>
+          Base frame
+          <input
+            value={baseFrame}
+            onChange={(event) => setBaseFrame(event.target.value)}
             onBlur={saveState}
           />
         </label>

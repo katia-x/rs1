@@ -18,6 +18,16 @@ source install/setup.bash
 ros2 launch rs1 rs1_demo.launch.py
 ```
 
+For the full two-robot demo with the glider pickup and sonar nodes:
+
+```bash
+ros2 launch rs1 rs1_demo_full.launch.py
+```
+
+The full demo starts `glider_node` and `sonar_node` when `parrot:=true`.
+Poo cubes can currently be spawned manually and submitted through
+`/glider/trajectory_goals`; Wombat does not yet create poo targets.
+
 Alternatively, build from the outer ROS workspace and source that workspace's
 `install/setup.bash`. Use the same build location consistently.
 
