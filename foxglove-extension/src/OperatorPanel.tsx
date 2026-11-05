@@ -17,6 +17,9 @@ type PanelState = {
   targetTopic?: string;
   tfTopic?: string;
   tfStaticTopic?: string;
+  gliderTfTopic?: string;
+  gliderTfStaticTopic?: string;
+  gliderFrame?: string;
   overrideTopic?: string;
   overrideCommandTopic?: string;
   estopTopic?: string;
@@ -226,6 +229,15 @@ function OperatorPanel({
   const [tfStaticTopic, setTfStaticTopic] = useState(
     initialState.tfStaticTopic ?? "/husky1/tf_static",
   );
+  const [gliderTfTopic, setGliderTfTopic] = useState(
+    initialState.gliderTfTopic ?? "/parrot1/tf",
+  );
+  const [gliderTfStaticTopic, setGliderTfStaticTopic] = useState(
+    initialState.gliderTfStaticTopic ?? "/parrot1/tf_static",
+  );
+  const [gliderFrame, setGliderFrame] = useState(
+    initialState.gliderFrame ?? "parrot1_base_link",
+  );
   const [overrideTopic, setOverrideTopic] = useState(
     initialState.overrideTopic ?? "/husky1/manual_override",
   );
@@ -243,6 +255,7 @@ function OperatorPanel({
   const [permanentWeeds, setPermanentWeeds] = useState<Point[]>([]);
   const [target, setTarget] = useState<Point>();
   const [wombat, setWombat] = useState<Point>();
+  const [glider, setGlider] = useState<Point>();
   const [wombatTrail, setWombatTrail] = useState<Point[]>([]);
   const lastTrailPoint = useRef<Point>();
   const transforms = useRef<Transform[]>([]);
@@ -264,6 +277,7 @@ function OperatorPanel({
         transforms.current = [];
         lastTrailPoint.current = undefined;
         setWombat(undefined);
+        setGlider(undefined);
         setWombatTrail([]);
       }
       const latest = (topic: string) => {
@@ -325,7 +339,12 @@ function OperatorPanel({
         );
       }
 
-      for (const topic of [tfTopic, tfStaticTopic]) {
+      for (const topic of [
+        tfTopic,
+        tfStaticTopic,
+        gliderTfTopic,
+        gliderTfStaticTopic,
+      ]) {
         const tfEvent = latest(topic);
         if (tfEvent) {
           const incoming =
@@ -363,6 +382,9 @@ function OperatorPanel({
         }
         setLastTfTime(Date.now());
       }
+      setGlider(
+        resolveTransform(transforms.current, globalFrame, gliderFrame),
+      );
 
       const overrideEvent = latest(overrideTopic);
       if (overrideEvent) {
@@ -393,6 +415,8 @@ function OperatorPanel({
       { topic: targetTopic },
       { topic: tfTopic },
       { topic: tfStaticTopic },
+      { topic: gliderTfTopic },
+      { topic: gliderTfStaticTopic },
       { topic: overrideTopic },
       { topic: estopTopic },
     ]);
@@ -409,6 +433,9 @@ function OperatorPanel({
     targetTopic,
     tfTopic,
     tfStaticTopic,
+    gliderTfTopic,
+    gliderTfStaticTopic,
+    gliderFrame,
   ]);
 
   const saveState = () =>
@@ -421,6 +448,9 @@ function OperatorPanel({
       targetTopic,
       tfTopic,
       tfStaticTopic,
+      gliderTfTopic,
+      gliderTfStaticTopic,
+      gliderFrame,
       overrideTopic,
       overrideCommandTopic,
       estopTopic,
@@ -555,6 +585,30 @@ function OperatorPanel({
           <input
             value={tfStaticTopic}
             onChange={(event) => setTfStaticTopic(event.target.value)}
+            onBlur={saveState}
+          />
+        </label>
+        <label>
+          Glider TF topic
+          <input
+            value={gliderTfTopic}
+            onChange={(event) => setGliderTfTopic(event.target.value)}
+            onBlur={saveState}
+          />
+        </label>
+        <label>
+          Glider static TF topic
+          <input
+            value={gliderTfStaticTopic}
+            onChange={(event) => setGliderTfStaticTopic(event.target.value)}
+            onBlur={saveState}
+          />
+        </label>
+        <label>
+          Glider frame
+          <input
+            value={gliderFrame}
+            onChange={(event) => setGliderFrame(event.target.value)}
             onBlur={saveState}
           />
         </label>
@@ -694,6 +748,14 @@ function OperatorPanel({
               height="3"
             />
           )}
+          {glider && (
+            <circle
+              className="glider-point"
+              cx={project(glider).x}
+              cy={project(glider).y}
+              r="1.8"
+            />
+          )}
         </svg>
       </div>
       <div className="operator-actions">
@@ -728,6 +790,7 @@ function OperatorPanel({
         <span>
           Wombat TF: {wombat ? "available" : "missing"} ({age(lastTfTime)})
         </span>
+        <span>Glider TF: {glider ? "available" : "missing"}</span>
         <span>Trail: {wombatTrail.length} points</span>
         <span>Markers: {age(lastMarkerTime)}</span>
       </div>

@@ -75,8 +75,8 @@ The extension provides two panels:
 
 - **RS1 region selection** for the focused region-publishing workflow.
 - **RS1 Wombat operator** for the top-down `map` view, region overlay,
-  tracked weed markers, live Wombat TF position and previous path, selected-target
-  marker, and manual override request.
+  tracked weed markers, live Wombat and Glider TF positions, Wombat's previous
+  path, selected-target marker, and manual override request.
 
 The operator map defines a region with exactly two clicks for opposite
 corners. The panel expands those corners into a four-vertex axis-aligned
@@ -84,10 +84,13 @@ rectangle before publishing `/region`; a third click starts a new rectangle.
 
 The operator panel observes `/husky1/manual_override` and `/husky1/estop`,
 `/husky1/weed_estimate_markers`, `/husky1/target_weed_marker`, and
-`/husky1/tf` and `/husky1/tf_static`. The map resolves the
-`map -> husky1_base_link` transform chain by default as the live Wombat
-location and retains up to 1,000 positions as a dashed trail. Configure the
-panel's **Base frame** field when using a different robot frame.
+`/husky1/tf` and `/husky1/tf_static`, plus `/parrot1/tf` and
+`/parrot1/tf_static` for the Glider. The map resolves the
+`map -> husky1_base_link` and `map -> parrot1_base_link` transform chains by
+default as the live Wombat and Glider locations. Only Wombat retains up to
+1,000 positions as a dashed trail; the Glider is shown as a cherry-blossom-pink
+current-position marker. Configure the panel's frame and topic fields when
+using different robot names or namespaces.
 The trail can be cleared independently. The operator panel provides a
 **Manual Override** toggle (which changes to **Automatic**), an independent
 **E-stop** toggle, and **Resume**. E-stop publishes to
