@@ -62,6 +62,7 @@ private:
   //glider pose for poo movement
   glider::Pose current_pose_;
   std::string current_model_name_;
+  std::string world_name_;
 
   // Processing layer
   std::unique_ptr<glider::GliderProcessing> processing_;

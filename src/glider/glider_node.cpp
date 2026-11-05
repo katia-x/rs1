@@ -29,7 +29,7 @@ GliderNode::GliderNode()
 
   this->declare_parameter("safe_height", 10.0);
   this->declare_parameter("pickup_height", 0.4);
-  this->declare_parameter("align_height", 3.0);
+  this->declare_parameter("align_height", 1.5);//test change (was 3)
 
   this->declare_parameter("xy_tolerance", 0.4);
   this->declare_parameter("z_tolerance", 0.15);
@@ -37,6 +37,8 @@ GliderNode::GliderNode()
   this->declare_parameter("control_rate", 20.0);
 
   this->declare_parameter("align_tolerance", 0.08);
+  this->declare_parameter("world_name", "rs1_terrain");
+  world_name_ = this->get_parameter("world_name").as_string();
 
 
   // ---------------------------------------------------------
@@ -322,7 +324,7 @@ void GliderNode::removePooModel(const std::string & name)
 {
   // Using ignition
   std::stringstream ss;
-  ss << "ign service -s /world/rs1_terrain/remove "
+  ss << "ign service -s /world/" << world_name_ << "/remove "
      << "--reqtype ignition.msgs.Entity "
      << "--reptype ignition.msgs.Boolean "
      << "--timeout 3000 "
