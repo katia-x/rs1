@@ -29,7 +29,7 @@ GliderNode::GliderNode()
 
   this->declare_parameter("safe_height", 10.0);
   this->declare_parameter("pickup_height", 0.4);
-  this->declare_parameter("align_height", 3.0);
+  this->declare_parameter("align_height", 1.5);//test change (was 3)
 
   this->declare_parameter("xy_tolerance", 0.4);
   this->declare_parameter("z_tolerance", 0.15);
@@ -37,6 +37,8 @@ GliderNode::GliderNode()
   this->declare_parameter("control_rate", 20.0);
 
   this->declare_parameter("align_tolerance", 0.08);
+  this->declare_parameter("world_name", "rs1_terrain");
+  world_name_ = this->get_parameter("world_name").as_string();
 
 
   // ---------------------------------------------------------
@@ -193,6 +195,12 @@ GliderNode::GliderNode()
         "/glider/status",
         10);
 
+  state_pub_ =
+    this->create_publisher<
+      rs1::msg::GliderState>(
+        "/glider/state",
+        rclcpp::QoS(1).transient_local());
+
 
   // ---------------------------------------------------------
   // Control loop
@@ -211,10 +219,20 @@ GliderNode::GliderNode()
         &GliderNode::controlLoop,
         this));
 
+  publishState();
+
 
   RCLCPP_INFO(
     this->get_logger(),
     "Glider node ready - waiting for poo locations");
+}
+
+void GliderNode::publishState()
+{
+  rs1::msg::GliderState message;
+  message.state = static_cast<std::uint8_t>(processing_->state());
+  message.carrying_poo = processing_->carryingPoo();
+  state_pub_->publish(message);
 }
 
 
@@ -322,7 +340,7 @@ void GliderNode::removePooModel(const std::string & name)
 {
   // Using ignition
   std::stringstream ss;
-  ss << "ign service -s /world/rs1_terrain/remove "
+  ss << "ign service -s /world/" << world_name_ << "/remove "
      << "--reqtype ignition.msgs.Entity "
      << "--reptype ignition.msgs.Boolean "
      << "--timeout 3000 "
@@ -358,6 +376,7 @@ void GliderNode::controlLoop()
 {
   const auto [command, status] =
     processing_->tick();
+  publishState();
 
   // Detect pickup
   static bool was_carrying = false;

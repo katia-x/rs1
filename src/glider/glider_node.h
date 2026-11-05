@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <cstdint>
 
 #include <rclcpp/rclcpp.hpp>
 
@@ -24,6 +25,7 @@
 #include <std_msgs/msg/float32.hpp>
 
 #include "rs1/msg/glider_goal.hpp"
+#include "rs1/msg/glider_state.hpp"
 
 #include "rs1/srv/get_cube_centre.hpp"
 
@@ -54,6 +56,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr nearest_below_sub_;
 
   void controlLoop();
+  void publishState();
 
   void removePooModel(
     const std::string & name);
@@ -62,6 +65,7 @@ private:
   //glider pose for poo movement
   glider::Pose current_pose_;
   std::string current_model_name_;
+  std::string world_name_;
 
   // Processing layer
   std::unique_ptr<glider::GliderProcessing> processing_;
@@ -84,6 +88,9 @@ private:
 
   rclcpp::Publisher<
     std_msgs::msg::String>::SharedPtr status_pub_;
+
+  rclcpp::Publisher<
+    rs1::msg::GliderState>::SharedPtr state_pub_;
     
   std::string last_status_;
 

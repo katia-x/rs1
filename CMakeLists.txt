@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.8)
 project(rs1)
 
 find_package(ament_cmake REQUIRED)
+find_package(action_msgs REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
@@ -10,6 +11,7 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rcl_interfaces REQUIRED)
+find_package(ros_gz_interfaces REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -23,8 +25,10 @@ find_package(ament_index_cpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/GliderState.msg"
   "msg/WombatWeedGoal.msg"
   "msg/WombatStatus.msg"
+  "msg/WombatState.msg"
   "srv/WombatNextGoal.srv"
   "srv/GetCubeCentre.srv"
   "msg/GliderGoal.msg"
@@ -51,14 +55,23 @@ ament_target_dependencies(
 )
 rosidl_target_interfaces(mission_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
 
-add_executable(wombat_node src/wombat/wombat_node.cpp)
+add_executable(wombat_node
+  src/wombat/wombat_node.cpp
+  src/gui_management/gui_management.cpp
+)
+target_include_directories(wombat_node PRIVATE src)
 ament_target_dependencies(
   wombat_node
+  action_msgs
   nav2_msgs
   rclcpp
   rclcpp_action
+  nav_msgs
+  ros_gz_interfaces
+  std_msgs
 )
 rosidl_target_interfaces(wombat_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(wombat_node platform)
 
 add_library(weed_override_layer SHARED
   src/weed_override_layer.cpp

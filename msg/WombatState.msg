@@ -1,0 +1,11 @@
+uint8 WAITING_FOR_REGION=0
+uint8 APPROACHING_START=1
+uint8 PRE_LANE_WAIT=2
+uint8 TURNING=3
+uint8 SEARCHING=4
+uint8 RECOVERY=5
+uint8 COMPLETE=6
+uint8 ABORT=7
+
+uint8 state
+uint64 mission_generation

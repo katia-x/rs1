@@ -28,6 +28,21 @@ goal at a time, keeps the lane-end goal active, and explicitly cancels that
 goal before sending a weed goal. After the weed goal succeeds, Wombat reports
 `WEED_HANDLED` and Mission returns the original search progression.
 
+Wombat publishes its current lifecycle state on `/wombat/state` as
+`rs1/msg/WombatState`. The message contains `state` and `mission_generation`;
+the state constants are `WAITING_FOR_REGION`, `APPROACHING_START`,
+`PRE_LANE_WAIT`, `TURNING`, `SEARCHING`, `RECOVERY`, `COMPLETE`, and `ABORT`.
+The topic is transient-local and is refreshed once per second, so a GUI
+subscriber receives the current state even if it connects between transitions.
+
+The Glider publishes human-readable processing text on `/glider/status` as
+`std_msgs/msg/String`. It also publishes its typed lifecycle state on
+`/glider/state` as `rs1/msg/GliderState`. The state constants are `STANDBY`,
+`GOTO_POO`, `DESCEND`, `ALIGN`, `FINAL_DESCEND`, `PICKUP`, `CLEAR_EXIT`,
+`GOTO_TRUCK`, `DROP_OFF`, `RETURN_HOME`, and `LAND`; the message also reports
+whether it is carrying poo. This topic is transient-local and is refreshed by
+the control loop.
+
 Wombat owns the Nav2 retry count. Nav2 has no recovery nodes in the active
 behavior tree, so a planning or control failure aborts the action. After
 retries are exhausted, Wombat reports a lane skip or unreachable weed to

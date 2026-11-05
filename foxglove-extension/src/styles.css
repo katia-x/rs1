@@ -1,0 +1,243 @@
+.panel {
+  color: #e7eaf0;
+  font-family: sans-serif;
+  padding: 1rem;
+}
+
+.operator-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  color: #e8edf2;
+  background: #182028;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: auto;
+}
+
+.operator-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 6px;
+}
+
+.operator-settings label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+}
+
+.operator-settings input {
+  color: inherit;
+  background: #27333d;
+  border: 1px solid #536372;
+  padding: 4px;
+}
+
+.operator-status,
+.operator-actions,
+.operator-diagnostics {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 12px;
+}
+
+.operator-status button,
+.operator-actions button {
+  color: inherit;
+  background: #34495a;
+  border: 1px solid #6c8497;
+  border-radius: 3px;
+  padding: 5px 8px;
+}
+
+.operator-status .estop-button {
+  background: #8f2f35;
+  border-color: #e26d73;
+  font-weight: bold;
+}
+
+.operator-status .release-button {
+  background: #286044;
+  border-color: #73c995;
+}
+
+.operator-status button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.status-enabled {
+  color: #ffb36b;
+  font-weight: bold;
+}
+
+.status-disabled {
+  color: #8fd19e;
+  font-weight: bold;
+}
+
+.operator-map-container {
+  aspect-ratio: 1 / 1;
+  max-height: 70vh;
+  width: 100%;
+  position: relative;
+}
+
+.operator-map {
+  height: 100%;
+  left: 0;
+  position: absolute;
+  top: 0;
+  background: #10161b;
+  border: 1px solid #536372;
+  cursor: crosshair;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.map-background-image {
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.region-overlay {
+  fill: #3d89b833;
+  stroke: #66b9ee;
+  stroke-width: 0.35;
+}
+
+.draft-region {
+  fill: none;
+  stroke: #f0c674;
+  stroke-width: 0.4;
+  stroke-dasharray: 1.5 1;
+}
+
+.weed-point {
+  fill: #72d6ff;
+  stroke: #d7f5ff;
+  stroke-width: 0.25;
+}
+
+.permanent-weed-point {
+  fill: #b084f5;
+  stroke: #eadcff;
+  stroke-width: 0.25;
+}
+
+.target-point {
+  fill: #ffbd66;
+  stroke: #fff3d4;
+  stroke-width: 0.5;
+}
+
+.wombat-point {
+  fill: #f26d85;
+  stroke: #fff;
+  stroke-width: 0.4;
+}
+
+.wombat-trail {
+  fill: none;
+  stroke: #f26d85;
+  stroke-width: 0.45;
+  stroke-dasharray: 1.2 0.8;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+.operator-diagnostics {
+  color: #b7c3cc;
+}
+
+.hint {
+  color: #aeb6c4;
+  max-width: 48rem;
+}
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+input {
+  background: #202630;
+  border: 1px solid #596273;
+  color: inherit;
+  padding: 0.35rem;
+}
+
+.map {
+  background-color: #15202b;
+  background-image:
+    linear-gradient(#2c3b4c 1px, transparent 1px),
+    linear-gradient(90deg, #2c3b4c 1px, transparent 1px);
+  background-size: 10% 10%;
+  border: 1px solid #64748b;
+  cursor: crosshair;
+  height: 20rem;
+  margin: 1rem 0;
+  max-width: 48rem;
+  position: relative;
+}
+
+.polygon {
+  height: 100%;
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+
+.polygon polygon {
+  fill: rgb(59 130 246 / 20%);
+  stroke: #60a5fa;
+  stroke-width: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+
+.vertex {
+  align-items: center;
+  background: #3b82f6;
+  border-radius: 50%;
+  display: flex;
+  height: 1.4rem;
+  justify-content: center;
+  position: absolute;
+  transform: translate(-50%, 50%);
+  width: 1.4rem;
+}
+
+.vertices,
+.status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin: 0.75rem 0;
+}
+
+.actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+button {
+  padding: 0.45rem 0.8rem;
+}
+
+.error {
+  color: #ff8a8a;
+  margin: 0.75rem 0;
+}
