@@ -151,6 +151,12 @@
   pointer-events: none;
 }
 
+.glider-point {
+  fill: #ffb7c5;
+  stroke: #fff;
+  stroke-width: 0.4;
+}
+
 .operator-diagnostics {
   color: #b7c3cc;
 }

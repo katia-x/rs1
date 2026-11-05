@@ -61,6 +61,11 @@ std::uint64_t GuiManagement::override_generation() const
 	return override_generation_;
 }
 
+std::uint64_t GuiManagement::control_generation() const
+{
+	return control_generation_;
+}
+
 void GuiManagement::override_callback(const std_msgs::msg::Bool::ConstSharedPtr message)
 {
 	if (!message || message->data == manual_override_) {
@@ -76,6 +81,7 @@ void GuiManagement::override_callback(const std_msgs::msg::Bool::ConstSharedPtr 
 	}
 	manual_override_ = message->data;
 	++override_generation_;
+	++control_generation_;
 	if (manual_override_) {
 		if (on_override_) {
 			on_override_(true);
@@ -97,7 +103,7 @@ void GuiManagement::estop_callback(const std_msgs::msg::Bool::ConstSharedPtr mes
 		return;
 	}
 	estop_active_ = message->data;
-	++override_generation_;
+	++control_generation_;
 	if (estop_active_) {
 		estop_release_ready_ = false;
 		resume_required_ = true;
@@ -118,10 +124,8 @@ void GuiManagement::resume_callback(const std_msgs::msg::Bool::ConstSharedPtr me
 		return;
 	}
 	resume_required_ = false;
-	manual_override_ = false;
-	++override_generation_;
+	++control_generation_;
 	RCLCPP_INFO(node_.get_logger(), "Resume accepted; autonomous navigation may resume");
-	publish_override_state();
 	if (on_resume_) {
 		on_resume_();
 	}

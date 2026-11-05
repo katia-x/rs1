@@ -106,6 +106,9 @@ origin at its centre. Published poses have `z = 0` and identity orientation.
 - **Wombat location is missing or stale:** confirm the TF and Static TF topics
   are `/husky1/tf` and `/husky1/tf_static`, and that **Base frame** is
   `husky1_base_link`.
+- **Glider location is missing:** confirm the Glider TF and Static TF topics
+  are `/parrot1/tf` and `/parrot1/tf_static`, and that **Glider frame** is
+  `parrot1_base_link`.
 - **Cannot drag the file:** save the `.foxe` file locally, then drag it from
   the file manager into the Foxglove Web window. If the organization blocks
   extension installation, ask its Foxglove administrator to enable or install

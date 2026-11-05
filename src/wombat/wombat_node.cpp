@@ -13,7 +13,8 @@ WombatNode::WombatNode()
   global_frame_(declare_parameter("global_frame", "map")),
   lane_start_wait_duration_(declare_parameter("lane_start_wait_duration", 1.0)),
   max_goal_retries_(declare_parameter("max_goal_retries", 3)),
-  nav_unavailable_timeout_(declare_parameter("nav_unavailable_timeout", 60.0))
+  nav_unavailable_timeout_(declare_parameter("nav_unavailable_timeout", 60.0)),
+  weeds_removed_topic_(declare_parameter("weeds_removed_topic", "/wombat/weeds_removed"))
 {
 	if (!std::isfinite(lane_start_wait_duration_) || lane_start_wait_duration_ < 0.0) {
 		throw std::invalid_argument("lane_start_wait_duration must be finite and non-negative");
@@ -44,7 +45,7 @@ WombatNode::WombatNode()
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
 
 	weeds_removed_publisher_ = create_publisher<std_msgs::msg::UInt32>(
-		"/wombat/weeds_removed",
+		weeds_removed_topic_,
 		rclcpp::QoS(1).reliable().transient_local());
 
 	// Publish the initial zero.
@@ -191,10 +192,10 @@ void WombatNode::spawn_poo()
 {
 	const auto & position = latest_husky_odometry_.pose.pose.position;
 	const auto model_name = "poo_" + std::to_string(++poo_count_);
-	platform_.spawnPoo(model_name, position.x, position.y, 0.25);
+	platform_.spawnPoo(model_name, position.x - 0.5, position.y, 0.25);
 
 	rs1::msg::GliderGoal goal;
-	goal.x = position.x;
+	goal.x = position.x - 0.5;
 	goal.y = position.y;
 	goal.z = 0.0;
 	goal.model_name = model_name;
@@ -330,14 +331,14 @@ void WombatNode::request_next_goal(std::uint8_t operation, std::uint64_t weed_id
 	mission_request_operation_ = operation;
 	mission_request_generation_ = mission_generation_;
 	const auto request_id = ++mission_request_id_;
-	const auto request_override_generation = gui_management_->override_generation();
+	const auto request_control_generation = gui_management_->control_generation();
 	auto request = std::make_shared<rs1::srv::WombatNextGoal::Request>();
 	request->operation = operation;
 	request->weed_id = weed_id;
 	mission_client_->async_send_request(
-		request, [this, request_id, request_override_generation](
+		request, [this, request_id, request_control_generation](
 			rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future) {
-			handle_mission_goal(future, request_id, request_override_generation);
+			handle_mission_goal(future, request_id, request_control_generation);
 		});
 }
 
@@ -501,15 +502,15 @@ void WombatNode::send_navigation_goal(
 	rclcpp_action::Client<NavigateToPose>::SendGoalOptions options;
 	const auto goal_generation = mission_generation_;
 	const auto request_id = ++nav_goal_request_id_;
-	const auto request_override_generation = gui_management_->override_generation();
+	const auto request_control_generation = gui_management_->control_generation();
 	options.goal_response_callback =
-		[this, goal_generation, request_id, request_override_generation](NavigateGoalHandle::SharedPtr goal_handle) {
+		[this, goal_generation, request_id, request_control_generation](NavigateGoalHandle::SharedPtr goal_handle) {
 			if (request_id != nav_goal_request_id_) {
 				if (goal_handle) { navigation_client_->async_cancel_goal(goal_handle); }
 				return;
 			}
 			if (goal_generation != mission_generation_ ||
-				request_override_generation != gui_management_->override_generation() ||
+				request_control_generation != gui_management_->control_generation() ||
 				mission_stopped()) {
 				nav_goal_request_in_flight_ = false;
 				if (goal_handle) { navigation_client_->async_cancel_goal(goal_handle); }
@@ -518,9 +519,9 @@ void WombatNode::send_navigation_goal(
 			handle_nav_goal_response(goal_handle);
 		};
 	options.result_callback =
-		[this, goal_generation, request_override_generation](const NavigateGoalHandle::WrappedResult & result) {
+		[this, goal_generation, request_control_generation](const NavigateGoalHandle::WrappedResult & result) {
 			if (goal_generation == mission_generation_ &&
-				request_override_generation == gui_management_->override_generation() &&
+				request_control_generation == gui_management_->control_generation() &&
 				!mission_stopped()) {
 				handle_nav_result(result);
 			}
@@ -531,14 +532,14 @@ void WombatNode::send_navigation_goal(
 
 void WombatNode::handle_mission_goal(
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future,
-	std::uint64_t request_id, std::uint64_t request_override_generation)
+	std::uint64_t request_id, std::uint64_t request_control_generation)
 {
 	if (request_id != mission_request_id_) {
 		return;
 	}
 	mission_request_in_flight_ = false;
 	if (mission_stopped() || mission_request_generation_ != mission_generation_ ||
-		request_override_generation != gui_management_->override_generation()) {
+		request_control_generation != gui_management_->control_generation()) {
 		return;
 	}
 

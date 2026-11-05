@@ -81,7 +81,7 @@ private:
 	void handle_nav_failure();
 	void handle_mission_goal(
 		rclcpp::Client<rs1::srv::WombatNextGoal>::SharedFuture future,
-		std::uint64_t request_id, std::uint64_t request_override_generation);
+		std::uint64_t request_id, std::uint64_t request_control_generation);
 	void handle_nav_goal_response(rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::SharedPtr goal_handle);
 	void handle_nav_result(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result);
 	void try_delete_weed();
@@ -96,6 +96,7 @@ private:
 	const double lane_start_wait_duration_;
 	const int max_goal_retries_;
 	const double nav_unavailable_timeout_;
+	const std::string weeds_removed_topic_;
 
 	rclcpp::Client<rs1::srv::WombatNextGoal>::SharedPtr mission_client_;
 	rclcpp::Client<DeleteEntity>::SharedPtr delete_entity_client_;
