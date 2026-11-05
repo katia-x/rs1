@@ -195,6 +195,12 @@ GliderNode::GliderNode()
         "/glider/status",
         10);
 
+  state_pub_ =
+    this->create_publisher<
+      rs1::msg::GliderState>(
+        "/glider/state",
+        rclcpp::QoS(1).transient_local());
+
 
   // ---------------------------------------------------------
   // Control loop
@@ -213,10 +219,20 @@ GliderNode::GliderNode()
         &GliderNode::controlLoop,
         this));
 
+  publishState();
+
 
   RCLCPP_INFO(
     this->get_logger(),
     "Glider node ready - waiting for poo locations");
+}
+
+void GliderNode::publishState()
+{
+  rs1::msg::GliderState message;
+  message.state = static_cast<std::uint8_t>(processing_->state());
+  message.carrying_poo = processing_->carryingPoo();
+  state_pub_->publish(message);
 }
 
 
@@ -360,6 +376,7 @@ void GliderNode::controlLoop()
 {
   const auto [command, status] =
     processing_->tick();
+  publishState();
 
   // Detect pickup
   static bool was_carrying = false;
