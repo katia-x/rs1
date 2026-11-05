@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<sdf version="1.8">
+  <model name="poo_cube">
+    <static>false</static>
+    <link name="link">
+      <inertial>
+        <mass>0.5</mass>
+        <inertia>
+          <ixx>0.01</ixx> <iyy>0.01</iyy> <izz>0.01</izz>
+        </inertia>
+      </inertial>
+      <visual name="visual">
+        <geometry>
+          <box><size>0.3 0.3 0.3</size></box>
+        </geometry>
+        <material>
+          <ambient>0.4 0.25 0.1 1</ambient>
+          <diffuse>0.4 0.25 0.1 1</diffuse>
+        </material>
+      </visual>
+      <collision name="collision">
+        <geometry>
+          <box><size>0.3 0.3 0.3</size></box>
+        </geometry>
+      </collision>
+    </link>
+  </model>
+</sdf>
