@@ -103,6 +103,9 @@ origin at its centre. Published poses have `z = 0` and identity orientation.
   Foxglove topic list and that the ROS type is
   `geometry_msgs/msg/PoseArray`.
 - **Mission rejects the region:** confirm both frame fields are `map`.
+- **Wombat location is missing or stale:** confirm the TF and Static TF topics
+  are `/husky1/tf` and `/husky1/tf_static`, and that **Base frame** is
+  `husky1_base_link`.
 - **Cannot drag the file:** save the `.foxe` file locally, then drag it from
   the file manager into the Foxglove Web window. If the organization blocks
   extension installation, ask its Foxglove administrator to enable or install
