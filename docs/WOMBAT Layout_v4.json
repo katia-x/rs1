@@ -375,73 +375,79 @@
       },
       "foxglovePanelTitle": "Glider Teleop"
     },
+    "RawMessages!3x8zens": {
+      "fontSize": 24,
+      "topicPath": "/wombat/weeds_eaten.data",
+      "foxglovePanelTitle": "Weeds eaten",
+      "defaultExpanded": false
+    },
     "StateTransitions!3bbd7ql": {
       "paths": [
         {
-          "label": "Glider state",
           "value": "/glider/state.state",
-          "enabled": true,
+          "timestampMethod": "receiveTime",
           "customStates": {
             "type": "discrete",
             "states": [
               {
+                "value": "0",
                 "color": "#9e9e9e",
-                "label": "STANDBY",
-                "value": "0"
+                "label": "STANDBY"
               },
               {
+                "value": "1",
                 "color": "#1f77b4",
-                "label": "GOTO_POO",
-                "value": "1"
+                "label": "GOTO_POO"
               },
               {
+                "value": "2",
                 "color": "#17becf",
-                "label": "DESCEND",
-                "value": "2"
+                "label": "DESCEND"
               },
               {
+                "value": "3",
                 "color": "#9467bd",
-                "label": "ALIGN",
-                "value": "3"
+                "label": "ALIGN"
               },
               {
+                "value": "4",
                 "color": "#ff7f0e",
-                "label": "FINAL_DESCEND",
-                "value": "4"
+                "label": "FINAL_DESCEND"
               },
               {
+                "value": "5",
                 "color": "#8c564b",
-                "label": "PICKUP",
-                "value": "5"
+                "label": "PICKUP"
               },
               {
+                "value": "6",
                 "color": "#e6c200",
-                "label": "CLEAR_EXIT",
-                "value": "6"
+                "label": "CLEAR_EXIT"
               },
               {
+                "value": "7",
                 "color": "#e377c2",
-                "label": "GOTO_TRUCK",
-                "value": "7"
+                "label": "GOTO_TRUCK"
               },
               {
+                "value": "8",
                 "color": "#2ca02c",
-                "label": "DROP_OFF",
-                "value": "8"
+                "label": "DROP_OFF"
               },
               {
+                "value": "9",
                 "color": "#0b5394",
-                "label": "RETURN_HOME",
-                "value": "9"
+                "label": "RETURN_HOME"
               },
               {
+                "value": "10",
                 "color": "#d62728",
-                "label": "LAND",
-                "value": "10"
+                "label": "LAND"
               }
             ]
           },
-          "timestampMethod": "receiveTime"
+          "label": "Glider state",
+          "enabled": true
         }
       ],
       "isSynced": true,
@@ -525,8 +531,13 @@
           },
           "second": {
             "first": "Teleop!3ofaila",
-            "second": "StateTransitions!3bbd7ql",
-            "direction": "column"
+            "second": {
+              "first": "RawMessages!3x8zens",
+              "second": "StateTransitions!3bbd7ql",
+              "direction": "column"
+            },
+            "direction": "column",
+            "splitPercentage": 39.51434878587195
           },
           "direction": "row",
           "splitPercentage": 66.76018965939735

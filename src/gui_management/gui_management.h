@@ -24,6 +24,7 @@ public:
 	bool estop_active() const;
 	bool resume_required() const;
 	std::uint64_t override_generation() const;
+	std::uint64_t control_generation() const;
 
 private:
 	void override_callback(const std_msgs::msg::Bool::ConstSharedPtr message);
@@ -41,6 +42,7 @@ private:
 	bool estop_release_ready_{false};
 	bool resume_required_{false};
 	std::uint64_t override_generation_{0};
+	std::uint64_t control_generation_{0};
 	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr override_subscription_;
 	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr estop_subscription_;
 	rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr resume_subscription_;
