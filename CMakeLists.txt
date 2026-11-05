@@ -25,6 +25,7 @@ find_package(ament_index_cpp REQUIRED)
 find_package(nav_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
+  "msg/GliderState.msg"
   "msg/WombatWeedGoal.msg"
   "msg/WombatStatus.msg"
   "msg/WombatState.msg"

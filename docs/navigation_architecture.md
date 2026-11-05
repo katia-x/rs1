@@ -35,6 +35,14 @@ the state constants are `WAITING_FOR_REGION`, `APPROACHING_START`,
 The topic is transient-local and is refreshed once per second, so a GUI
 subscriber receives the current state even if it connects between transitions.
 
+The Glider publishes human-readable processing text on `/glider/status` as
+`std_msgs/msg/String`. It also publishes its typed lifecycle state on
+`/glider/state` as `rs1/msg/GliderState`. The state constants are `STANDBY`,
+`GOTO_POO`, `DESCEND`, `ALIGN`, `FINAL_DESCEND`, `PICKUP`, `CLEAR_EXIT`,
+`GOTO_TRUCK`, `DROP_OFF`, `RETURN_HOME`, and `LAND`; the message also reports
+whether it is carrying poo. This topic is transient-local and is refreshed by
+the control loop.
+
 Wombat owns the Nav2 retry count. Nav2 has no recovery nodes in the active
 behavior tree, so a planning or control failure aborts the action. After
 retries are exhausted, Wombat reports a lane skip or unreachable weed to
