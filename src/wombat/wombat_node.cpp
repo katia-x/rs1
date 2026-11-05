@@ -140,6 +140,9 @@ void WombatNode::try_delete_weed()
 
 				std_msgs::msg::UInt32 count;
 				count.data = static_cast<std::uint32_t>(removed_plant_names_.size());
+				if(count.data%3 ==0){
+					spawn_poo();
+				}
 				weeds_removed_publisher_->publish(count);
 			}
 
@@ -174,7 +177,6 @@ void WombatNode::finish_weed_removal(bool removed)
 	} else {
 		queue_request(GoalRequest::WEED_UNREACHABLE, last_weed_id_);
 	}
-	spawn_poo_if_due();
 	last_goal_is_weed_ = false;
 	last_weed_name_.clear();
 	state_ = State::Searching;
@@ -185,16 +187,11 @@ void WombatNode::odometry_callback(const nav_msgs::msg::Odometry::SharedPtr mess
 	latest_husky_odometry_ = *message;
 }
 
-void WombatNode::spawn_poo_if_due()
+void WombatNode::spawn_poo()
 {
-	++weeds_since_last_poo_;
-	if (weeds_since_last_poo_ < 3) {
-		return;
-	}
-
 	const auto & position = latest_husky_odometry_.pose.pose.position;
 	const auto model_name = "poo_" + std::to_string(++poo_count_);
-	platform_.spawnPoo(model_name, position.x, position.y, position.z);
+	platform_.spawnPoo(model_name, position.x, position.y, 0.25);
 
 	rs1::msg::GliderGoal goal;
 	goal.x = position.x;
@@ -202,7 +199,6 @@ void WombatNode::spawn_poo_if_due()
 	goal.z = 0.0;
 	goal.model_name = model_name;
 	trajectory_goals_publisher_->publish(goal);
-	weeds_since_last_poo_ = 0;
 	RCLCPP_INFO(get_logger(), "Spawned %s at Husky position (%.2f, %.2f, %.2f)",
 		model_name.c_str(), position.x, position.y, position.z);
 }

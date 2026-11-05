@@ -86,7 +86,7 @@ private:
 	void handle_nav_result(const rclcpp_action::ClientGoalHandle<nav2_msgs::action::NavigateToPose>::WrappedResult & result);
 	void try_delete_weed();
 	void finish_weed_removal(bool removed);
-	void spawn_poo_if_due();
+	void spawn_poo();
 	void handle_override(bool enabled);
 	void handle_estop();
 	void handle_resume();
@@ -139,7 +139,6 @@ private:
 	std::chrono::steady_clock::time_point deletion_deadline_{};
 	std::int64_t deletion_ros_request_id_{0};
 	nav_msgs::msg::Odometry latest_husky_odometry_;
-	std::size_t weeds_since_last_poo_{0};
 	std::size_t poo_count_{0};
 };
 
