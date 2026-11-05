@@ -11,6 +11,7 @@ find_package(pluginlib REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rcl_interfaces REQUIRED)
+find_package(ros_gz_interfaces REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -65,6 +66,7 @@ ament_target_dependencies(
   nav2_msgs
   rclcpp
   rclcpp_action
+  ros_gz_interfaces
   std_msgs
 )
 rosidl_target_interfaces(wombat_node ${PROJECT_NAME} "rosidl_typesupport_cpp")

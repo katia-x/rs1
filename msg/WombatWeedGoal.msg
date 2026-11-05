@@ -1,3 +1,4 @@
 geometry_msgs/PoseStamped goal
 uint64 weed_id
 uint64 mission_generation
+string weed_name
