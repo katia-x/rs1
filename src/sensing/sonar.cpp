@@ -12,6 +12,7 @@ SonarNode::SonarNode()
   this->declare_parameter("cloud_topic", "/parrot1/camera/depth/points");
   this->declare_parameter("max_lateral_distance", 5.0);
   this->declare_parameter("centre_radius", 0.4);
+  this->declare_parameter("cube_half_size", 0.25);   // NEW – tight box for cube
   this->declare_parameter("min_range", 0.2);
   this->declare_parameter("max_range", 20.0);
   this->declare_parameter("high_point_margin", 0.08);
@@ -20,22 +21,22 @@ SonarNode::SonarNode()
   this->declare_parameter("cube_search_radius", 1.5);
   this->declare_parameter("cube_max_age", 1.0);
 
-  cloud_topic_ = this->get_parameter("cloud_topic").as_string();
-  max_lateral_distance_ = this->get_parameter("max_lateral_distance").as_double();
-  centre_radius_ = this->get_parameter("centre_radius").as_double();
-  min_range_ = this->get_parameter("min_range").as_double();
-  max_range_ = this->get_parameter("max_range").as_double();
-  high_point_margin_ = this->get_parameter("high_point_margin").as_double();
-  min_points_ = this->get_parameter("min_points").as_int();
-  min_high_points_ = this->get_parameter("min_high_points").as_int();
-
-  cube_search_radius_ = this->get_parameter("cube_search_radius").as_double();
-  cube_max_age_ = this->get_parameter("cube_max_age").as_double();
+  cloud_topic_           = this->get_parameter("cloud_topic").as_string();
+  max_lateral_distance_  = this->get_parameter("max_lateral_distance").as_double();
+  centre_radius_         = this->get_parameter("centre_radius").as_double();
+  cube_half_size_        = this->get_parameter("cube_half_size").as_double();
+  min_range_             = this->get_parameter("min_range").as_double();
+  max_range_             = this->get_parameter("max_range").as_double();
+  high_point_margin_     = this->get_parameter("high_point_margin").as_double();
+  min_points_            = this->get_parameter("min_points").as_int();
+  min_high_points_       = this->get_parameter("min_high_points").as_int();
+  cube_search_radius_    = this->get_parameter("cube_search_radius").as_double();
+  cube_max_age_          = this->get_parameter("cube_max_age").as_double();
 
   cube_service_ = this->create_service<rs1::srv::GetCubeCentre>(
     "/glider/sonar",
     std::bind(&SonarNode::getCubeCentre, this,
-            std::placeholders::_1, std::placeholders::_2));
+              std::placeholders::_1, std::placeholders::_2));
 
   cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
     cloud_topic_, 10,
@@ -52,15 +53,16 @@ SonarNode::SonarNode()
 
   RCLCPP_INFO(
     this->get_logger(),
-    "Sonar ready (floor = wide window, cube top = centre window). "
+    "Sonar ready (floor = wide window, cube top = tight ±%.2f m box). "
     "Topics: /glider/height_above_poo, /glider/sonar_high_points, "
-    "/glider/sonar_high_range");
+    "/glider/sonar_high_range",
+    cube_half_size_);
 }
 
 void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg)
 {
-  // Wide window: used for the floor.
-  // Centre window: narrow area directly below the glider, used for the cube top.
+  // Wide window  → floor height
+  // Tight ±cube_half_size_ box → cube top & cube centre
   std::vector<double> floor_ranges;
   std::vector<double> centre_ranges;
   floor_ranges.reserve(2000);
@@ -73,23 +75,27 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
     for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z) {
       const double x = static_cast<double>(*iter_x);
       const double y = static_cast<double>(*iter_y);
-      const double z = static_cast<double>(*iter_z);  
+      const double z = static_cast<double>(*iter_z);
 
       if (!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z)) {
         continue;
       }
-      const double depth = x; //to test which one is depth 
+
+      const double depth = x;   // optical frame depth (adjust if your frame differs)
       if (depth < min_range_ || depth > max_range_) {
         continue;
       }
 
-      const double lateral = std::hypot(y, z);  // sideways offset from the camera axis
+      const double lateral = std::hypot(y, z);
       if (lateral > max_lateral_distance_) {
         continue;
       }
 
+      // Always collect for the floor
       floor_ranges.push_back(depth);
-      if (lateral < centre_radius_) {
+
+      // STRICT axis-aligned box for anything that influences the cube
+      if (std::abs(y) < cube_half_size_ && std::abs(z) < cube_half_size_) {
         centre_ranges.push_back(depth);
       }
     }
@@ -116,16 +122,18 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
   // Floor = far end of the wide window (90th percentile ignores stray far pixels)
   const double floor = percentile(floor_ranges, 0.90);
 
-  // Cube top = near end of the centre window (5th percentile ignores stray near pixels)
+  // Cube top = near end of the STRICT centre box
+  // 10th percentile is a bit more robust than 5th against a few noisy near points
   const bool have_centre = static_cast<int>(centre_ranges.size()) >= min_high_points_;
-  const double closest = have_centre ? percentile(centre_ranges, 0.05) : floor;
+  const double closest = have_centre ? percentile(centre_ranges, 0.10) : floor;
 
   const double cube_height = floor - closest;
   const bool saw_high = have_centre && cube_height > high_point_margin_;
   const double high_range = saw_high ? closest : floor;
 
   // ------------------------------------------------------------------
-  // Cube centre: centroid of the "high" points (only when a cube is seen)
+  // Cube centre: centroid of the "high" points that lie inside the
+  // same strict ±cube_half_size_ box
   // ------------------------------------------------------------------
   latest_cube_.valid = false;
   if (saw_high) {
@@ -135,6 +143,7 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
 
     double sum_y = 0.0, sum_z = 0.0;
     size_t count = 0;
+
     for (; cx != cx.end(); ++cx, ++cy, ++cz) {
       const double d = static_cast<double>(*cx);
       const double y = static_cast<double>(*cy);
@@ -144,22 +153,25 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
         continue;
       }
       if (d < min_range_ || d > floor - high_point_margin_) {
-        continue;  // not closer than the floor, so not part of the cube
+        continue;   // not closer than the floor → not part of the cube
       }
-      if (std::hypot(y, z) > cube_search_radius_) {
+
+      // MUST be inside the ±0.25 m box – this is the key change
+      if (std::abs(y) >= cube_half_size_ || std::abs(z) >= cube_half_size_) {
         continue;
       }
+
       sum_y += y;
       sum_z += z;
       ++count;
     }
 
     if (count >= static_cast<size_t>(min_high_points_)) {
-      latest_cube_.valid = true;
+      latest_cube_.valid   = true;
       latest_cube_.forward = sum_z / static_cast<double>(count);
-      latest_cube_.left = sum_y / static_cast<double>(count);
-      latest_cube_.depth = closest;
-      latest_cube_.stamp = this->now();
+      latest_cube_.left    = sum_y / static_cast<double>(count);
+      latest_cube_.depth   = closest;
+      latest_cube_.stamp   = this->now();
     }
   }
 
@@ -186,7 +198,8 @@ void SonarNode::cloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr msg
 
   RCLCPP_INFO_THROTTLE(
     this->get_logger(), *this->get_clock(), 500,
-    "floor=%.2f m | closest=%.2f m | cube_height=%.2f m | high_points=%s | n=%zu centre_n=%zu",
+    "floor=%.2f m | closest=%.2f m | cube_height=%.2f m | high_points=%s | "
+    "n=%zu centre_n=%zu",
     floor, closest, cube_height, saw_high ? "YES" : "no",
     floor_ranges.size(), centre_ranges.size());
 }
