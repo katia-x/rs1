@@ -66,10 +66,12 @@ ament_target_dependencies(
   nav2_msgs
   rclcpp
   rclcpp_action
+  nav_msgs
   ros_gz_interfaces
   std_msgs
 )
 rosidl_target_interfaces(wombat_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(wombat_node platform)
 
 add_library(weed_override_layer SHARED
   src/weed_override_layer.cpp

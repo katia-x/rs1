@@ -9,6 +9,7 @@ using GoalRequest = rs1::srv::WombatNextGoal::Request;
 
 WombatNode::WombatNode()
 : Node("wombat_node"),
+	platform_(this->get_logger()),
   global_frame_(declare_parameter("global_frame", "map")),
   lane_start_wait_duration_(declare_parameter("lane_start_wait_duration", 1.0)),
   max_goal_retries_(declare_parameter("max_goal_retries", 3)),
@@ -30,11 +31,16 @@ WombatNode::WombatNode()
 	weed_goal_subscription_ = create_subscription<rs1::msg::WombatWeedGoal>(
 		"/wombat/weed_goal", rclcpp::QoS(1).transient_local(),
 		std::bind(&WombatNode::weed_goal_callback, this, std::placeholders::_1));
+	odometry_subscription_ = create_subscription<nav_msgs::msg::Odometry>(
+		"/husky1/odometry", rclcpp::QoS(10),
+		std::bind(&WombatNode::odometry_callback, this, std::placeholders::_1));
 	status_subscription_ = create_subscription<rs1::msg::WombatStatus>(
 		"/wombat/status", rclcpp::QoS(1).transient_local(),
 		std::bind(&WombatNode::status_callback, this, std::placeholders::_1));
 	state_publisher_ = create_publisher<rs1::msg::WombatState>(
 		"/wombat/state", rclcpp::QoS(1).transient_local());
+	trajectory_goals_publisher_ = create_publisher<rs1::msg::GliderGoal>(
+		"/glider/trajectory_goals", rclcpp::QoS(10));
 	navigation_client_ = rclcpp_action::create_client<NavigateToPose>(
 		this, declare_parameter("navigation_action", "/husky1/navigate_to_pose"));
 
@@ -135,7 +141,10 @@ void WombatNode::try_delete_weed()
 
 				std_msgs::msg::UInt32 count;
 				count.data = static_cast<std::uint32_t>(removed_plant_names_.size());
-				weeds_eaten_publisher_->publish(count);
+				if(count.data%3 ==0){
+					spawn_poo();
+				}
+				weeds_removed_publisher_->publish(count);
 			}
 
 			// An old response must not change the current mission.
@@ -172,6 +181,27 @@ void WombatNode::finish_weed_removal(bool removed)
 	last_goal_is_weed_ = false;
 	last_weed_name_.clear();
 	state_ = State::Searching;
+}
+
+void WombatNode::odometry_callback(const nav_msgs::msg::Odometry::SharedPtr message)
+{
+	latest_husky_odometry_ = *message;
+}
+
+void WombatNode::spawn_poo()
+{
+	const auto & position = latest_husky_odometry_.pose.pose.position;
+	const auto model_name = "poo_" + std::to_string(++poo_count_);
+	platform_.spawnPoo(model_name, position.x, position.y, 0.25);
+
+	rs1::msg::GliderGoal goal;
+	goal.x = position.x;
+	goal.y = position.y;
+	goal.z = 0.0;
+	goal.model_name = model_name;
+	trajectory_goals_publisher_->publish(goal);
+	RCLCPP_INFO(get_logger(), "Spawned %s at Husky position (%.2f, %.2f, %.2f)",
+		model_name.c_str(), position.x, position.y, position.z);
 }
 
 void WombatNode::timer_callback()
