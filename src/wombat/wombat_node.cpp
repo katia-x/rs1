@@ -192,10 +192,10 @@ void WombatNode::spawn_poo()
 {
 	const auto & position = latest_husky_odometry_.pose.pose.position;
 	const auto model_name = "poo_" + std::to_string(++poo_count_);
-	platform_.spawnPoo(model_name, position.x, position.y, 0.25);
+	platform_.spawnPoo(model_name, position.x - 0.5, position.y, 0.25);
 
 	rs1::msg::GliderGoal goal;
-	goal.x = position.x;
+	goal.x = position.x - 0.5;
 	goal.y = position.y;
 	goal.z = 0.0;
 	goal.model_name = model_name;
