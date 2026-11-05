@@ -19,11 +19,15 @@ find_package(sensor_msgs REQUIRED)
 find_package(vision_msgs REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(OpenCV REQUIRED COMPONENTS core imgproc imgcodecs dnn)
+find_package(ament_index_cpp REQUIRED)
+find_package(nav_msgs REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/WombatWeedGoal.msg"
   "msg/WombatStatus.msg"
   "srv/WombatNextGoal.srv"
+  "srv/GetCubeCentre.srv"
+  "msg/GliderGoal.msg"
   DEPENDENCIES geometry_msgs
 )
 
@@ -69,6 +73,53 @@ ament_target_dependencies(
   tf2_geometry_msgs
   tf2_ros
 )
+
+# --- Glider processing library ---
+add_library(glider_processing
+  src/glider/glider_processing.cpp
+)
+target_include_directories(glider_processing PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  $<INSTALL_INTERFACE:include>
+)
+
+# --- Platform library (shared poo spawning) ---
+add_library(platform
+  src/platform.cpp
+)
+target_include_directories(platform PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(platform rclcpp ament_index_cpp)
+
+# --- Glider node ---
+add_executable(glider_node
+  src/glider/glider_node.cpp
+)
+target_include_directories(glider_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  $<INSTALL_INTERFACE:include>
+)
+target_link_libraries(glider_node glider_processing platform)
+ament_target_dependencies(glider_node
+  rclcpp std_msgs geometry_msgs sensor_msgs nav_msgs
+)
+rosidl_target_interfaces(glider_node ${PROJECT_NAME} "rosidl_typesupport_cpp")
+
+# --- Sonar node ---
+add_executable(sonar_node
+  src/sensing/sonar.cpp
+)
+target_include_directories(sonar_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(sonar_node
+  rclcpp geometry_msgs sensor_msgs nav_msgs
+)
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(sonar_node "${cpp_typesupport_target}")
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
@@ -121,6 +172,8 @@ install(DIRECTORY behavior_trees launch config worlds urdf_husky urdf_parrot
 install(TARGETS
   mission_node
   wombat_node
+  glider_node
+  sonar_node
   DESTINATION lib/${PROJECT_NAME}
 )
 
