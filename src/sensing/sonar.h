@@ -22,8 +22,10 @@ private:
   const std::shared_ptr<rs1::srv::GetCubeCentre::Request> request,
   std::shared_ptr<rs1::srv::GetCubeCentre::Response> response);
 
-  double cube_search_radius_{1.5};  // how far from the camera axis to look for cube points
+  double cube_search_radius_{0.5};  // how far from the camera axis to look for cube points
   double cube_max_age_{1.0};        // s; older detections are treated as "no cube"
+  // In the class (sonar.h)
+  double cube_half_size_{0.25};   // |y| and |z| must both be < this for cube points
 
   struct CubeCentre
   {
@@ -43,7 +45,7 @@ private:
   std::string cloud_topic_;
   double max_lateral_distance_{1.0};
   double centre_radius_{0.4};       // narrow window under the glider, used for the cube top
-  double min_range_{0.45};
+  double min_range_{0.32};
   double max_range_{12.0};
   double high_point_margin_{0.08};  // m closer than floor => "high"
   int min_points_{30};
