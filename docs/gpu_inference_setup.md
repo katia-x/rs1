@@ -1,4 +1,4 @@
-# GPU inference setup for teammates
+# GPU inference setup
 
 This guide enables **C++ OpenCV CUDA inference**, without installing PyTorch,
 MMDetection, or a training virtual environment. Python is used by the ROS build/launch
